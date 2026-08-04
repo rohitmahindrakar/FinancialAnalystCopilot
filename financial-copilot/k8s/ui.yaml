@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: financial-copilot-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: financial-copilot-ui
+  template:
+    metadata:
+      labels:
+        app: financial-copilot-ui
+    spec:
+      containers:
+        - name: ui
+          image: financial-copilot-ui:latest
+          ports:
+            - containerPort: 8501
+          envFrom:
+            - configMapRef:
+                name: financial-copilot-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: financial-copilot-ui
+spec:
+  selector:
+    app: financial-copilot-ui
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8501
+  type: ClusterIP

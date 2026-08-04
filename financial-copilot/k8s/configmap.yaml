@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: financial-copilot-config
+data:
+  API_BASE_URL: "http://financial-copilot-api:8000"
+  OPENAI_API_BASE: "https://api.openai.com/v1"
+  OPENAI_MODEL: "gpt-4.1-mini"
+  OPENAI_API_KEY: ""
+  OLLAMA_URL: "http://ollama:11434/api/generate"
+  DATABASE_PATH: "/data/financial_analyst_copilot.db"
+  CHROMA_PERSIST_DIR: "/data/chroma"

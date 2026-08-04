@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: financial-copilot-data-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: financial-copilot-chroma-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi

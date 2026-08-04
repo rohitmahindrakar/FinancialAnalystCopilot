@@ -1,0 +1,14 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: financial-copilot-ingestion-worker
+spec:
+  template:
+    spec:
+      containers:
+        - name: ingestion-worker
+          image: financial-copilot-ingestion-worker:latest
+          envFrom:
+            - configMapRef:
+                name: financial-copilot-config
+      restartPolicy: OnFailure

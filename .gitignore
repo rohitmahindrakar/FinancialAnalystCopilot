@@ -1,0 +1,60 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Jupyter / notebooks outputs
+.ipynb_checkpoints/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE / editor files
+.vscode/
+.idea/
+
+# Test / coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+.coverage.*
+
+# Build / packaging
+build/
+dist/
+*.egg-info/
+
+# Local data and runtime artifacts
+*.sqlite3
+*.db
+*.db-journal
+*.parquet
+*.csv
+*.jsonl
+*.bin
+*.databases
+
+# Keep project code/docs/database content tracked
+# (do not ignore source files, documents, or database folders explicitly)
+.chroma/af3f9584-67c3-4e3f-b9b6-6d32d61f1e26/data_level0.bin
+notebooks/.chroma/a077e353-f24f-4bea-8418-0efbece7859a/data_level0.bin
+notebooks/.chroma/a077e353-f24f-4bea-8418-0efbece7859a/header.bin

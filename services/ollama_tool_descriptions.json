@@ -1,0 +1,489 @@
+{
+  "base_url": "http://127.0.0.1:8000",
+  "overview": "This API exposes structured finance datasets for budgets, forecasts, actuals, accounts, business units, and reporting periods, plus a Chroma semantic search index over finance documents for narrative and contextual insights.",
+  "tools": [
+    {
+      "name": "health_check",
+      "description": "Check API health and database connectivity.",
+      "method": "GET",
+      "path": "/health",
+      "query_params": null,
+      "path_params": null,
+      "body_schema": null,
+      "response_schema": {
+        "status": "string",
+        "database_connected": "boolean"
+      }
+    },
+    {
+      "name": "list_tables",
+      "description": "List available API metadata tables.",
+      "method": "GET",
+      "path": "/metadata/tables",
+      "query_params": null,
+      "path_params": null,
+      "body_schema": null,
+      "response_schema": {
+        "tables": "array[string]"
+      }
+    },
+    {
+      "name": "query_finance_chunks",
+      "description": "Query the local ChromaDB finance chunk collection for semantically relevant passages that answer finance questions.",
+      "method": "POST",
+      "path": "/chroma/query-finance",
+      "query_params": null,
+      "path_params": null,
+      "body_schema": {
+        "query": "string",
+        "collection_name": "string",
+        "n_results": "integer"
+      },
+      "response_schema": {
+        "collection_name": "string",
+        "query": "string",
+        "n_results": "integer",
+        "results": "array[object]"
+      }
+    },
+    {
+      "name": "list_accounts",
+      "description": "List account records with optional filters.",
+      "method": "GET",
+      "path": "/accounts",
+      "query_params": {
+        "limit": {"type": "integer", "default": 25, "minimum": 1, "maximum": 200},
+        "offset": {"type": "integer", "default": 0, "minimum": 0},
+        "account_code": {"type": "string", "nullable": true},
+        "account_type": {"type": "string", "nullable": true},
+        "active_flag": {"type": "integer", "nullable": true, "minimum": 0, "maximum": 1},
+        "parent_account_id": {"type": "integer", "nullable": true}
+      },
+      "path_params": null,
+      "body_schema": null,
+      "response_schema": {
+        "total": "integer",
+        "limit": "integer",
+        "offset": "integer",
+        "items": "array[object]"
+      }
+    },
+    {
+      "name": "get_account",
+      "description": "Retrieve a single account by account_id.",
+      "method": "GET",
+      "path": "/accounts/{account_id}",
+      "query_params": null,
+      "path_params": {
+        "account_id": {"type": "integer"}
+      },
+      "body_schema": null,
+      "response_schema": "object"
+    },
+    {
+      "name": "create_account",
+      "description": "Create a new account record.",
+      "method": "POST",
+      "path": "/accounts",
+      "query_params": null,
+      "path_params": null,
+      "body_schema": {
+        "account_code": "string",
+        "account_name": "string",
+        "account_type": "string",
+        "financial_statement_section": "string",
+        "normal_balance": "string",
+        "parent_account_id": {"type": "integer", "nullable": true},
+        "active_flag": {"type": "integer", "nullable": true, "minimum": 0, "maximum": 1}
+      },
+      "response_schema": {
+        "account_id": "integer"
+      }
+    },
+    {
+      "name": "update_account",
+      "description": "Update an existing account record.",
+      "method": "PUT",
+      "path": "/accounts/{account_id}",
+      "query_params": null,
+      "path_params": {
+        "account_id": {"type": "integer"}
+      },
+      "body_schema": {
+        "account_code": {"type": "string", "nullable": true},
+        "account_name": {"type": "string", "nullable": true},
+        "account_type": {"type": "string", "nullable": true},
+        "financial_statement_section": {"type": "string", "nullable": true},
+        "normal_balance": {"type": "string", "nullable": true},
+        "parent_account_id": {"type": "integer", "nullable": true},
+        "active_flag": {"type": "integer", "nullable": true, "minimum": 0, "maximum": 1}
+      },
+      "response_schema": {
+        "account_id": "integer"
+      }
+    },
+    {
+      "name": "delete_account",
+      "description": "Delete an account by account_id.",
+      "method": "DELETE",
+      "path": "/accounts/{account_id}",
+      "query_params": null,
+      "path_params": {
+        "account_id": {"type": "integer"}
+      },
+      "body_schema": null,
+      "response_schema": null
+    },
+    {
+      "name": "list_business_units",
+      "description": "List business unit records with optional filters.",
+      "method": "GET",
+      "path": "/business-units",
+      "query_params": {
+        "limit": {"type": "integer", "default": 25, "minimum": 1, "maximum": 200},
+        "offset": {"type": "integer", "default": 0, "minimum": 0},
+        "region": {"type": "string", "nullable": true},
+        "segment": {"type": "string", "nullable": true},
+        "active_flag": {"type": "integer", "nullable": true, "minimum": 0, "maximum": 1}
+      },
+      "path_params": null,
+      "body_schema": null,
+      "response_schema": {
+        "total": "integer",
+        "limit": "integer",
+        "offset": "integer",
+        "items": "array[object]"
+      }
+    },
+    {
+      "name": "get_business_unit",
+      "description": "Retrieve a business unit by business_unit_id.",
+      "method": "GET",
+      "path": "/business-units/{business_unit_id}",
+      "query_params": null,
+      "path_params": {
+        "business_unit_id": {"type": "integer"}
+      },
+      "body_schema": null,
+      "response_schema": "object"
+    },
+    {
+      "name": "create_business_unit",
+      "description": "Create a new business unit record.",
+      "method": "POST",
+      "path": "/business-units",
+      "query_params": null,
+      "path_params": null,
+      "body_schema": {
+        "business_unit_name": "string",
+        "parent_business_unit_id": {"type": "integer", "nullable": true},
+        "region": {"type": "string", "nullable": true},
+        "segment": {"type": "string", "nullable": true},
+        "active_flag": {"type": "integer", "nullable": true, "minimum": 0, "maximum": 1}
+      },
+      "response_schema": {
+        "business_unit_id": "integer"
+      }
+    },
+    {
+      "name": "update_business_unit",
+      "description": "Update a business unit record.",
+      "method": "PUT",
+      "path": "/business-units/{business_unit_id}",
+      "query_params": null,
+      "path_params": {
+        "business_unit_id": {"type": "integer"}
+      },
+      "body_schema": {
+        "business_unit_name": {"type": "string", "nullable": true},
+        "parent_business_unit_id": {"type": "integer", "nullable": true},
+        "region": {"type": "string", "nullable": true},
+        "segment": {"type": "string", "nullable": true},
+        "active_flag": {"type": "integer", "nullable": true, "minimum": 0, "maximum": 1}
+      },
+      "response_schema": {
+        "business_unit_id": "integer"
+      }
+    },
+    {
+      "name": "delete_business_unit",
+      "description": "Delete a business unit by business_unit_id.",
+      "method": "DELETE",
+      "path": "/business-units/{business_unit_id}",
+      "query_params": null,
+      "path_params": {
+        "business_unit_id": {"type": "integer"}
+      },
+      "body_schema": null,
+      "response_schema": null
+    },
+    {
+      "name": "list_periods",
+      "description": "List period records with optional filters.",
+      "method": "GET",
+      "path": "/periods",
+      "query_params": {
+        "limit": {"type": "integer", "default": 25, "minimum": 1, "maximum": 200},
+        "offset": {"type": "integer", "default": 0, "minimum": 0},
+        "year": {"type": "integer", "nullable": true},
+        "quarter": {"type": "integer", "nullable": true, "minimum": 1, "maximum": 4},
+        "month": {"type": "integer", "nullable": true, "minimum": 1, "maximum": 12},
+        "fiscal_year": {"type": "integer", "nullable": true},
+        "is_closed": {"type": "integer", "nullable": true, "minimum": 0, "maximum": 1}
+      },
+      "path_params": null,
+      "body_schema": null,
+      "response_schema": {
+        "total": "integer",
+        "limit": "integer",
+        "offset": "integer",
+        "items": "array[object]"
+      }
+    },
+    {
+      "name": "get_period",
+      "description": "Retrieve a period by period_id.",
+      "method": "GET",
+      "path": "/periods/{period_id}",
+      "query_params": null,
+      "path_params": {
+        "period_id": {"type": "integer"}
+      },
+      "body_schema": null,
+      "response_schema": "object"
+    },
+    {
+      "name": "create_period",
+      "description": "Create a new period record.",
+      "method": "POST",
+      "path": "/periods",
+      "query_params": null,
+      "path_params": null,
+      "body_schema": {
+        "period_name": "string",
+        "month": {"type": "integer", "minimum": 1, "maximum": 12},
+        "month_name": "string",
+        "quarter": {"type": "integer", "minimum": 1, "maximum": 4},
+        "year": "integer",
+        "period_start_date": "string",
+        "period_end_date": "string",
+        "fiscal_year": "integer",
+        "fiscal_quarter": "string",
+        "is_closed": {"type": "integer", "nullable": true, "minimum": 0, "maximum": 1}
+      },
+      "response_schema": {
+        "period_id": "integer"
+      }
+    },
+    {
+      "name": "update_period",
+      "description": "Update a period record.",
+      "method": "PUT",
+      "path": "/periods/{period_id}",
+      "query_params": null,
+      "path_params": {
+        "period_id": {"type": "integer"}
+      },
+      "body_schema": {
+        "period_name": {"type": "string", "nullable": true},
+        "month": {"type": "integer", "nullable": true, "minimum": 1, "maximum": 12},
+        "month_name": {"type": "string", "nullable": true},
+        "quarter": {"type": "integer", "nullable": true, "minimum": 1, "maximum": 4},
+        "year": {"type": "integer", "nullable": true},
+        "period_start_date": {"type": "string", "nullable": true},
+        "period_end_date": {"type": "string", "nullable": true},
+        "fiscal_year": {"type": "integer", "nullable": true},
+        "fiscal_quarter": {"type": "string", "nullable": true},
+        "is_closed": {"type": "integer", "nullable": true, "minimum": 0, "maximum": 1}
+      },
+      "response_schema": {
+        "period_id": "integer"
+      }
+    },
+    {
+      "name": "delete_period",
+      "description": "Delete a period by period_id.",
+      "method": "DELETE",
+      "path": "/periods/{period_id}",
+      "query_params": null,
+      "path_params": {
+        "period_id": {"type": "integer"}
+      },
+      "body_schema": null,
+      "response_schema": null
+    },
+    {
+      "name": "list_source_documents",
+      "description": "List source documents with optional filters.",
+      "method": "GET",
+      "path": "/source-documents",
+      "query_params": {
+        "limit": {"type": "integer", "default": 25, "minimum": 1, "maximum": 200},
+        "offset": {"type": "integer", "default": 0, "minimum": 0},
+        "document_type": {"type": "string", "nullable": true},
+        "source_category": {"type": "string", "nullable": true}
+      },
+      "path_params": null,
+      "body_schema": null,
+      "response_schema": {
+        "total": "integer",
+        "limit": "integer",
+        "offset": "integer",
+        "items": "array[object]"
+      }
+    },
+    {
+      "name": "get_source_document",
+      "description": "Retrieve a source document by source_document_id.",
+      "method": "GET",
+      "path": "/source-documents/{source_document_id}",
+      "query_params": null,
+      "path_params": {
+        "source_document_id": {"type": "integer"}
+      },
+      "body_schema": null,
+      "response_schema": "object"
+    },
+    {
+      "name": "create_source_document",
+      "description": "Create a new source document record.",
+      "method": "POST",
+      "path": "/source-documents",
+      "query_params": null,
+      "path_params": null,
+      "body_schema": {
+        "document_name": "string",
+        "document_type": "string",
+        "document_path": "string",
+        "source_category": "string",
+        "created_date": {"type": "string", "nullable": true},
+        "checksum": {"type": "string", "nullable": true},
+        "description": {"type": "string", "nullable": true}
+      },
+      "response_schema": {
+        "source_document_id": "integer"
+      }
+    },
+    {
+      "name": "update_source_document",
+      "description": "Update a source document record.",
+      "method": "PUT",
+      "path": "/source-documents/{source_document_id}",
+      "query_params": null,
+      "path_params": {
+        "source_document_id": {"type": "integer"}
+      },
+      "body_schema": {
+        "document_name": {"type": "string", "nullable": true},
+        "document_type": {"type": "string", "nullable": true},
+        "document_path": {"type": "string", "nullable": true},
+        "source_category": {"type": "string", "nullable": true},
+        "created_date": {"type": "string", "nullable": true},
+        "checksum": {"type": "string", "nullable": true},
+        "description": {"type": "string", "nullable": true}
+      },
+      "response_schema": {
+        "source_document_id": "integer"
+      }
+    },
+    {
+      "name": "delete_source_document",
+      "description": "Delete a source document by source_document_id.",
+      "method": "DELETE",
+      "path": "/source-documents/{source_document_id}",
+      "query_params": null,
+      "path_params": {
+        "source_document_id": {"type": "integer"}
+      },
+      "body_schema": null,
+      "response_schema": null
+    },
+    {
+      "name": "list_answer_citations",
+      "description": "List answer citations with optional filters.",
+      "method": "GET",
+      "path": "/answer-citations",
+      "query_params": {
+        "limit": {"type": "integer", "default": 25, "minimum": 1, "maximum": 200},
+        "offset": {"type": "integer", "default": 0, "minimum": 0},
+        "query_id": {"type": "integer", "nullable": true},
+        "source_document_id": {"type": "integer", "nullable": true},
+        "chunk_id": {"type": "integer", "nullable": true},
+        "citation_type": {"type": "string", "nullable": true}
+      },
+      "path_params": null,
+      "body_schema": null,
+      "response_schema": {
+        "total": "integer",
+        "limit": "integer",
+        "offset": "integer",
+        "items": "array[object]"
+      }
+    },
+    {
+      "name": "get_answer_citation",
+      "description": "Retrieve an answer citation by citation_id.",
+      "method": "GET",
+      "path": "/answer-citations/{citation_id}",
+      "query_params": null,
+      "path_params": {
+        "citation_id": {"type": "integer"}
+      },
+      "body_schema": null,
+      "response_schema": "object"
+    },
+    {
+      "name": "create_answer_citation",
+      "description": "Create a new answer citation record.",
+      "method": "POST",
+      "path": "/answer-citations",
+      "query_params": null,
+      "path_params": null,
+      "body_schema": {
+        "query_id": "integer",
+        "source_document_id": {"type": "integer", "nullable": true},
+        "chunk_id": {"type": "integer", "nullable": true},
+        "source_table": {"type": "string", "nullable": true},
+        "source_column": {"type": "string", "nullable": true},
+        "citation_type": "string",
+        "citation_text": "string"
+      },
+      "response_schema": {
+        "citation_id": "integer"
+      }
+    },
+    {
+      "name": "update_answer_citation",
+      "description": "Update an answer citation record.",
+      "method": "PUT",
+      "path": "/answer-citations/{citation_id}",
+      "query_params": null,
+      "path_params": {
+        "citation_id": {"type": "integer"}
+      },
+      "body_schema": {
+        "source_document_id": {"type": "integer", "nullable": true},
+        "chunk_id": {"type": "integer", "nullable": true},
+        "source_table": {"type": "string", "nullable": true},
+        "source_column": {"type": "string", "nullable": true},
+        "citation_type": {"type": "string", "nullable": true},
+        "citation_text": {"type": "string", "nullable": true}
+      },
+      "response_schema": {
+        "citation_id": "integer"
+      }
+    },
+    {
+      "name": "delete_answer_citation",
+      "description": "Delete an answer citation by citation_id.",
+      "method": "DELETE",
+      "path": "/answer-citations/{citation_id}",
+      "query_params": null,
+      "path_params": {
+        "citation_id": {"type": "integer"}
+      },
+      "body_schema": null,
+      "response_schema": null
+    }
+  ]
+}

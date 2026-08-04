@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: financial-copilot-chroma-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: financial-copilot-chroma-service
+  template:
+    metadata:
+      labels:
+        app: financial-copilot-chroma-service
+    spec:
+      containers:
+        - name: chroma-service
+          image: financial-copilot-chroma-service:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: financial-copilot-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: financial-copilot-chroma-service
+spec:
+  selector:
+    app: financial-copilot-chroma-service
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP
