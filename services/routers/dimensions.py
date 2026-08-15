@@ -20,7 +20,7 @@ router = APIRouter()
 
 
 @router.get("/accounts")
-def list_accounts(
+async def list_accounts(
     limit: int = Query(25, ge=1, le=200),
     offset: int = Query(0, ge=0),
     account_code: str | None = None,
@@ -30,7 +30,7 @@ def list_accounts(
     db: DatabaseConnection = Depends(get_database_connection),
 ) -> Any:
     dao = DimAccountDAO(db)
-    results = dao.search(
+    results = await dao.search(
         {
             "account_code": account_code,
             "account_type": account_type,
@@ -44,43 +44,43 @@ def list_accounts(
 
 
 @router.get("/accounts/{account_id}")
-def get_account(account_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
+async def get_account(account_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
     dao = DimAccountDAO(db)
-    record = dao.get_by_id(account_id)
+    record = await dao.get_by_id(account_id)
     if not record:
         raise HTTPException(status_code=404, detail="Account not found")
     return record
 
 
 @router.post("/accounts", status_code=201)
-def create_account(payload: DimAccountCreate, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
+async def create_account(payload: DimAccountCreate, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
     dao = DimAccountDAO(db)
-    account_id = dao.create_from_model(payload)
+    account_id = await dao.create_from_model(payload)
     return {"account_id": account_id}
 
 
 @router.put("/accounts/{account_id}")
-def update_account(
+async def update_account(
     account_id: int,
     payload: DimAccountUpdate,
     db: DatabaseConnection = Depends(get_database_connection),
 ) -> Any:
     dao = DimAccountDAO(db)
-    if not dao.update(account_id, payload):
+    if not await dao.update(account_id, payload):
         raise HTTPException(status_code=404, detail="Account not found")
     return {"account_id": account_id}
 
 
 @router.delete("/accounts/{account_id}", status_code=204)
-def delete_account(account_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Response:
+async def delete_account(account_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Response:
     dao = DimAccountDAO(db)
-    if not dao.delete_by_id(account_id):
+    if not await dao.delete_by_id(account_id):
         raise HTTPException(status_code=404, detail="Account not found")
     return Response(status_code=204)
 
 
 @router.get("/business-units")
-def list_business_units(
+async def list_business_units(
     limit: int = Query(25, ge=1, le=200),
     offset: int = Query(0, ge=0),
     region: str | None = None,
@@ -89,7 +89,7 @@ def list_business_units(
     db: DatabaseConnection = Depends(get_database_connection),
 ) -> Any:
     dao = DimBusinessUnitDAO(db)
-    results = dao.search(
+    results = await dao.search(
         {
             "region": region,
             "segment": segment,
@@ -102,43 +102,43 @@ def list_business_units(
 
 
 @router.get("/business-units/{business_unit_id}")
-def get_business_unit(business_unit_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
+async def get_business_unit(business_unit_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
     dao = DimBusinessUnitDAO(db)
-    record = dao.get_by_id(business_unit_id)
+    record = await dao.get_by_id(business_unit_id)
     if not record:
         raise HTTPException(status_code=404, detail="Business unit not found")
     return record
 
 
 @router.post("/business-units", status_code=201)
-def create_business_unit(payload: DimBusinessUnitCreate, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
+async def create_business_unit(payload: DimBusinessUnitCreate, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
     dao = DimBusinessUnitDAO(db)
-    business_unit_id = dao.create_from_model(payload)
+    business_unit_id = await dao.create_from_model(payload)
     return {"business_unit_id": business_unit_id}
 
 
 @router.put("/business-units/{business_unit_id}")
-def update_business_unit(
+async def update_business_unit(
     business_unit_id: int,
     payload: DimBusinessUnitUpdate,
     db: DatabaseConnection = Depends(get_database_connection),
 ) -> Any:
     dao = DimBusinessUnitDAO(db)
-    if not dao.update(business_unit_id, payload):
+    if not await dao.update(business_unit_id, payload):
         raise HTTPException(status_code=404, detail="Business unit not found")
     return {"business_unit_id": business_unit_id}
 
 
 @router.delete("/business-units/{business_unit_id}", status_code=204)
-def delete_business_unit(business_unit_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Response:
+async def delete_business_unit(business_unit_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Response:
     dao = DimBusinessUnitDAO(db)
-    if not dao.delete_by_id(business_unit_id):
+    if not await dao.delete_by_id(business_unit_id):
         raise HTTPException(status_code=404, detail="Business unit not found")
     return Response(status_code=204)
 
 
 @router.get("/periods")
-def list_periods(
+async def list_periods(
     limit: int = Query(25, ge=1, le=200),
     offset: int = Query(0, ge=0),
     year: int | None = None,
@@ -149,7 +149,7 @@ def list_periods(
     db: DatabaseConnection = Depends(get_database_connection),
 ) -> Any:
     dao = DimPeriodDAO(db)
-    results = dao.search(
+    results = await dao.search(
         {
             "year": year,
             "quarter": quarter,
@@ -164,36 +164,36 @@ def list_periods(
 
 
 @router.get("/periods/{period_id}")
-def get_period(period_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
+async def get_period(period_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
     dao = DimPeriodDAO(db)
-    record = dao.get_by_id(period_id)
+    record = await dao.get_by_id(period_id)
     if not record:
         raise HTTPException(status_code=404, detail="Period not found")
     return record
 
 
 @router.post("/periods", status_code=201)
-def create_period(payload: DimPeriodCreate, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
+async def create_period(payload: DimPeriodCreate, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
     dao = DimPeriodDAO(db)
-    period_id = dao.create_from_model(payload)
+    period_id = await dao.create_from_model(payload)
     return {"period_id": period_id}
 
 
 @router.put("/periods/{period_id}")
-def update_period(
+async def update_period(
     period_id: int,
     payload: DimPeriodUpdate,
     db: DatabaseConnection = Depends(get_database_connection),
 ) -> Any:
     dao = DimPeriodDAO(db)
-    if not dao.update(period_id, payload):
+    if not await dao.update(period_id, payload):
         raise HTTPException(status_code=404, detail="Period not found")
     return {"period_id": period_id}
 
 
 @router.delete("/periods/{period_id}", status_code=204)
-def delete_period(period_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Response:
+async def delete_period(period_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Response:
     dao = DimPeriodDAO(db)
-    if not dao.delete_by_id(period_id):
+    if not await dao.delete_by_id(period_id):
         raise HTTPException(status_code=404, detail="Period not found")
     return Response(status_code=204)

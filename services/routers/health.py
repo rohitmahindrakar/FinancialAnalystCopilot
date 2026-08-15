@@ -9,10 +9,10 @@ from database.connection import DatabaseConnection
 router = APIRouter()
 
 
-@router.get("/health")
-def health_check(db: DatabaseConnection = Depends(get_database_connection)) -> Any:
+@router.get("/health-check")
+async def health_check(db: DatabaseConnection = Depends(get_database_connection)) -> Any:
     try:
-        with db.session() as connection:
+        async with db.session() as connection:
             connection.execute("SELECT 1")
         return {"status": "ok", "database_connected": True}
     except Exception:

@@ -6,6 +6,7 @@ import logging
 import os
 from dataclasses import asdict
 from pathlib import Path
+import sys
 from typing import Any, Optional
 
 from dotenv import load_dotenv
@@ -13,7 +14,7 @@ from dotenv import load_dotenv
 from .chunking import ChunkingHelper
 from .chroma_store import ChunkChromaStore
 from .embeddings import ChunkEmbedder, LocalSentenceTransformerEmbeddingProvider, OpenAIEmbeddingProvider
-from .models import ChunkRecord, IngestionResult
+from .models import ChunkRecord, IngestionResult, MetadataFact
 from .providers import ModelProvider
 from .readers import DocumentReader
 
@@ -58,6 +59,8 @@ class Injestor:
         self.timeout = timeout
         self.logger = logger or logging.getLogger(__name__)
         self.provider_name = (provider or "ollama").strip().lower()
+        #print(os.getenv("OPENAI_API_KEY"))
+        #print(os.getenv("OPENAI_API_BASE"))
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.api_base = api_base or os.getenv("OPENAI_API_BASE")
         self.external_model = external_model or os.getenv("OPENAI_MODEL") or model
@@ -96,8 +99,29 @@ class Injestor:
         )
         self.supported_extensions = self.reader.supported_extensions
 
+        print("embedding provider:", self.embedding_provider.__class__.__name__)
+
+    async def run_ingestion(self, path: Optional[str | Path] = None) -> list[IngestionResult]:
+        financeDocs = Path(path) if path is not None else self.repo_root / 'notebooks' / 'finance_docs'
+        use_external = os.getenv("OPENAI_API_KEY") is not None and os.getenv("OPENAI_API_KEY", "").strip() != ""
+        if use_external:
+            ingestor = Injestor(
+                source_dir=financeDocs,
+                model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+                provider="openai",
+                use_external_model=True,
+            )
+            print("Using external OpenAI-compatible model via LiteLLM")
+        else:
+            ingestor = Injestor(source_dir=financeDocs, model='gemma3:270m')
+            print("Using local Ollama model")
+
+        print(f'Ingesting documents from: {financeDocs}')
+        results = await ingestor.ingest_documents()
+        return results
+
     async def ingest_documents(self) -> list[IngestionResult]:
-        """Read documents from the configured folder, send them to Ollama, and return chunked results."""
+        """Read documents from the configured folder, send them to Ollama/OpenAI, and return chunked results."""
         if not self.source_dir.exists():
             raise FileNotFoundError(f"Source directory does not exist: {self.source_dir}")
 
@@ -111,6 +135,10 @@ class Injestor:
         results = await asyncio.gather(*tasks)
         successful_results = [result for result in results if result is not None]
         self._persist_results(successful_results)
+
+        # no_of_documents = len(document_paths)
+        # no_of_chunks = sum(result.chunk_count for result in successful_results)
+
         return successful_results
 
     def _list_documents(self) -> list[Path]:
@@ -148,7 +176,7 @@ class Injestor:
 
     async def _chunk_text(self, document_name: str, text: str) -> list[ChunkRecord]:
         self.logger.info("Processing document: %s", document_name)
-        response_text = await self._call_ollama(document_name, text)
+        response_text = await self._call_ai_chunk_text(document_name, text)
         if not response_text:
             self.logger.warning("No response content received for %s", document_name)
         else:
@@ -163,16 +191,23 @@ class Injestor:
                     word_count=int(chunk_payload.get("word_count") or len(chunk_payload.get("chunk", "").split())),
                     headline=str(chunk_payload.get("headline", "")).strip(),
                     summary=str(chunk_payload.get("summary", "")).strip(),
+                    metadata_facts=[
+                        MetadataFact(
+                            key=str(fact.get("key", "")).strip(),
+                            value=str(fact.get("value", "")).strip(),
+                        )
+                        for fact in chunk_payload.get("metadata", [])
+                    ],
                 )
                 for index, chunk_payload in enumerate(parsed_chunks)
             ]
 
-        print("Ollama response was not parsable; falling back to deterministic chunking for %s", document_name)
+        print("Response from AI was not parsable; falling back to deterministic chunking for %s", document_name)
         self.logger.warning("Ollama response was not parsable; falling back to deterministic chunking for %s", document_name)
         return self.chunking_helper.fallback_chunk_text(document_name, text)
 
-    async def _call_ollama(self, document_name: str, text: str) -> str:
-        return await self.provider._call_ollama(document_name, text)
+    async def _call_ai_chunk_text(self, document_name: str, text: str) -> str:
+        return await self.provider._call_ai_chunk_text(document_name, text)
 
     async def _call_local_ollama(self, document_name: str, text: str) -> str:
         return await self.provider._call_local_ollama(document_name, text)

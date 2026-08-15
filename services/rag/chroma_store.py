@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 import logging
 import os
 import shutil
 from pathlib import Path
 from typing import Any, Optional
 
+# 'attrs.asdict' was accidentally imported previously, overriding dataclasses.asdict.
+# Use dataclasses.asdict for dataclass instances like MetadataFact.
 from chromadb import PersistentClient
 from chromadb.config import Settings
 
@@ -90,6 +93,12 @@ class ChunkChromaStore:
 
         try:
             if self.collection_name in existing_collections:
+                #delete and recreate the collection to ensure it's in a clean state
+                # self._client.delete_collection(self.collection_name)
+                # self._collection = self._client.get_or_create_collection(
+                #     name=self.collection_name,
+                #     metadata={"hnsw:space": "cosine"},
+                # )
                 self._collection = self._client.get_collection(name=self.collection_name)
             else:
                 self._collection = self._client.get_or_create_collection(
@@ -110,16 +119,29 @@ class ChunkChromaStore:
             return
 
         documents = [chunk.chunk_text for chunk in chunks]
-        metadatas = [
-            {
+        metadatas: list[dict[str, Any]] = []
+        for chunk in chunks:
+            md: dict[str, Any] = {
                 "document_name": chunk.document_name,
                 "chunk_index": chunk.chunk_index,
                 "word_count": chunk.word_count,
                 "headline": chunk.headline,
                 "summary": chunk.summary,
             }
-            for chunk in chunks
-        ]
+            # Expand metadata facts into top-level keys with primitive values or lists
+            for fact in getattr(chunk, "metadata_facts", []) or []:
+                key = fact.key
+                val = fact.value
+                if key in md:
+                    # If key already exists, convert to list or append
+                    existing = md[key]
+                    if isinstance(existing, list):
+                        existing.append(val)
+                    else:
+                        md[key] = [existing, val]
+                else:
+                    md[key] = val
+            metadatas.append(md)
         ids = [f"{chunk.document_name}:{chunk.chunk_index}" for chunk in chunks]
 
         embeddings = [chunk.embedding for chunk in chunks if getattr(chunk, "embedding", None) is not None]

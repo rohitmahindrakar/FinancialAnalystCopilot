@@ -20,7 +20,7 @@ router = APIRouter()
 
 
 @router.get("/finance/actuals")
-def list_finance_actuals(
+async def list_finance_actuals(
     limit: int = Query(25, ge=1, le=200),
     offset: int = Query(0, ge=0),
     period_id: int | None = None,
@@ -30,7 +30,7 @@ def list_finance_actuals(
     db: DatabaseConnection = Depends(get_database_connection),
 ) -> Any:
     dao = FinanceActualsDAO(db)
-    results = dao.search(
+    results = await dao.search(
         {
             "period_id": period_id,
             "business_unit_id": business_unit_id,
@@ -44,43 +44,43 @@ def list_finance_actuals(
 
 
 @router.get("/finance/actuals/{actual_id}")
-def get_finance_actual(actual_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
+async def get_finance_actual(actual_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
     dao = FinanceActualsDAO(db)
-    record = dao.get_by_id(actual_id)
+    record = await dao.get_by_id(actual_id)
     if not record:
         raise HTTPException(status_code=404, detail="Finance actual not found")
     return record
 
 
 @router.post("/finance/actuals", status_code=201)
-def create_finance_actual(payload: FinanceActualsCreate, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
+async def create_finance_actual(payload: FinanceActualsCreate, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
     dao = FinanceActualsDAO(db)
-    actual_id = dao.create_from_model(payload)
+    actual_id = await dao.create_from_model(payload)
     return {"actual_id": actual_id}
 
 
 @router.put("/finance/actuals/{actual_id}")
-def update_finance_actual(
+async def update_finance_actual(
     actual_id: int,
     payload: FinanceActualsUpdate,
     db: DatabaseConnection = Depends(get_database_connection),
 ) -> Any:
     dao = FinanceActualsDAO(db)
-    if not dao.update(actual_id, payload):
+    if not await dao.update(actual_id, payload):
         raise HTTPException(status_code=404, detail="Finance actual not found")
     return {"actual_id": actual_id}
 
 
 @router.delete("/finance/actuals/{actual_id}", status_code=204)
-def delete_finance_actual(actual_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Response:
+async def delete_finance_actual(actual_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Response:
     dao = FinanceActualsDAO(db)
-    if not dao.delete_by_id(actual_id):
+    if not await dao.delete_by_id(actual_id):
         raise HTTPException(status_code=404, detail="Finance actual not found")
     return Response(status_code=204)
 
 
 @router.get("/finance/budgets")
-def list_finance_budgets(
+async def list_finance_budgets(
     limit: int = Query(25, ge=1, le=200),
     offset: int = Query(0, ge=0),
     period_id: int | None = None,
@@ -90,7 +90,7 @@ def list_finance_budgets(
     db: DatabaseConnection = Depends(get_database_connection),
 ) -> Any:
     dao = FinanceBudgetDAO(db)
-    results = dao.search(
+    results = await dao.search(
         {
             "period_id": period_id,
             "business_unit_id": business_unit_id,
@@ -104,43 +104,43 @@ def list_finance_budgets(
 
 
 @router.get("/finance/budgets/{budget_id}")
-def get_finance_budget(budget_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
+async def get_finance_budget(budget_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
     dao = FinanceBudgetDAO(db)
-    record = dao.get_by_id(budget_id)
+    record = await dao.get_by_id(budget_id)
     if not record:
         raise HTTPException(status_code=404, detail="Finance budget not found")
     return record
 
 
 @router.post("/finance/budgets", status_code=201)
-def create_finance_budget(payload: FinanceBudgetCreate, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
+async def create_finance_budget(payload: FinanceBudgetCreate, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
     dao = FinanceBudgetDAO(db)
-    budget_id = dao.create_from_model(payload)
+    budget_id = await dao.create_from_model(payload)
     return {"budget_id": budget_id}
 
 
 @router.put("/finance/budgets/{budget_id}")
-def update_finance_budget(
+async def update_finance_budget(
     budget_id: int,
     payload: FinanceBudgetUpdate,
     db: DatabaseConnection = Depends(get_database_connection),
 ) -> Any:
     dao = FinanceBudgetDAO(db)
-    if not dao.update(budget_id, payload):
+    if not await dao.update(budget_id, payload):
         raise HTTPException(status_code=404, detail="Finance budget not found")
     return {"budget_id": budget_id}
 
 
 @router.delete("/finance/budgets/{budget_id}", status_code=204)
-def delete_finance_budget(budget_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Response:
+async def delete_finance_budget(budget_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Response:
     dao = FinanceBudgetDAO(db)
-    if not dao.delete_by_id(budget_id):
+    if not await dao.delete_by_id(budget_id):
         raise HTTPException(status_code=404, detail="Finance budget not found")
     return Response(status_code=204)
 
 
 @router.get("/finance/forecasts")
-def list_finance_forecasts(
+async def list_finance_forecasts(
     limit: int = Query(25, ge=1, le=200),
     offset: int = Query(0, ge=0),
     period_id: int | None = None,
@@ -150,7 +150,7 @@ def list_finance_forecasts(
     db: DatabaseConnection = Depends(get_database_connection),
 ) -> Any:
     dao = FinanceForecastDAO(db)
-    results = dao.search(
+    results = await dao.search(
         {
             "period_id": period_id,
             "business_unit_id": business_unit_id,
@@ -164,36 +164,36 @@ def list_finance_forecasts(
 
 
 @router.get("/finance/forecasts/{forecast_id}")
-def get_finance_forecast(forecast_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
+async def get_finance_forecast(forecast_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
     dao = FinanceForecastDAO(db)
-    record = dao.get_by_id(forecast_id)
+    record = await dao.get_by_id(forecast_id)
     if not record:
         raise HTTPException(status_code=404, detail="Finance forecast not found")
     return record
 
 
 @router.post("/finance/forecasts", status_code=201)
-def create_finance_forecast(payload: FinanceForecastCreate, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
+async def create_finance_forecast(payload: FinanceForecastCreate, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
     dao = FinanceForecastDAO(db)
-    forecast_id = dao.create_from_model(payload)
+    forecast_id = await dao.create_from_model(payload)
     return {"forecast_id": forecast_id}
 
 
 @router.put("/finance/forecasts/{forecast_id}")
-def update_finance_forecast(
+async def update_finance_forecast(
     forecast_id: int,
     payload: FinanceForecastUpdate,
     db: DatabaseConnection = Depends(get_database_connection),
 ) -> Any:
     dao = FinanceForecastDAO(db)
-    if not dao.update(forecast_id, payload):
+    if not await dao.update(forecast_id, payload):
         raise HTTPException(status_code=404, detail="Finance forecast not found")
     return {"forecast_id": forecast_id}
 
 
 @router.delete("/finance/forecasts/{forecast_id}", status_code=204)
-def delete_finance_forecast(forecast_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Response:
+async def delete_finance_forecast(forecast_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Response:
     dao = FinanceForecastDAO(db)
-    if not dao.delete_by_id(forecast_id):
+    if not await dao.delete_by_id(forecast_id):
         raise HTTPException(status_code=404, detail="Finance forecast not found")
     return Response(status_code=204)

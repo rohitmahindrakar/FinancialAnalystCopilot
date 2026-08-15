@@ -8,33 +8,58 @@ from pydantic import json
 import requests
 
 from .models import ChunkRecord
-
+from openai import OpenAI
 
 class OpenAIEmbeddingProvider:
     """Generate embeddings with OpenAI's text-embedding-3-small model."""
 
-    def __init__(self, api_key: Optional[str] = None, api_base: Optional[str] = None, model: str = "text-embedding-3-small") -> None:
+    def __init__(self, api_key: Optional[str] = None, api_base: Optional[str] = None, model: str = "text-embedding-3-large") -> None:
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.api_base = api_base or os.getenv("OPENAI_API_BASE")
         self.model = model
+        self.openai = OpenAI()
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
-        if not self.api_key:
-            raise RuntimeError("OPENAI_API_KEY is not configured for embeddings.")
+        # if not self.api_key:
+        #     raise RuntimeError("OPENAI_API_KEY is not configured for embeddings.")
 
         url = f"{self.api_base.rstrip('/') if self.api_base else 'https://api.openai.com/v1'}/embeddings"
-        response = requests.post(
-            url,
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-            json={"input": texts, "model": self.model},
-            timeout=90,
-        )
-        response.raise_for_status()
-        payload = response.json()
-        return [item["embedding"] for item in payload.get("data", [])]
+        # Allow optional SSL verification configuration:
+        # - If OPENAI_VERIFY_SSL is set to "false"/"0"/"no" -> disable verification (not recommended)
+        # - If OPENAI_VERIFY_SSL is a path to a CA bundle file -> use that bundle
+        # Otherwise default to normal verification (requests will also respect REQUESTS_CA_BUNDLE)
+        verify: bool | str = False
+        # verify_env = os.getenv("OPENAI_VERIFY_SSL")
+        # if verify_env:
+        #     if verify_env.lower() in ("false", "0", "no"):
+        #         verify = False
+        #     elif os.path.exists(verify_env):
+        #         verify = verify_env
+
+        try:
+            response = self.openai.embeddings.create(model=self.model, input=texts)
+            # response = requests.post(
+            #     url,
+            #     headers={
+            #         "Authorization": f"Bearer {self.api_key}",
+            #         "Content-Type": "application/json",
+            #     },
+            #     json={"input": texts, "model": self.model},
+            #     timeout=90,
+            #     verify=verify,
+            # )
+            # response.raise_for_status()
+        except requests.exceptions.SSLError as exc:  # pragma: no cover - environment dependent
+            raise RuntimeError(
+                "SSL error while calling OpenAI embeddings endpoint: %s. "
+                "If you're behind a corporate proxy or use an internal CA, set OPENAI_VERIFY_SSL="
+                "to the path of your CA bundle, or set REQUESTS_CA_BUNDLE / SSL_CERT_FILE accordingly. "
+                "Disabling verification with OPENAI_VERIFY_SSL=false is insecure and not recommended." % exc
+            ) from exc
+        except requests.RequestException as exc:  # pragma: no cover - network error handling
+            raise RuntimeError(f"Error calling OpenAI embeddings endpoint: {exc}") from exc
+
+        return [item.embedding for item in response.data]
 
 
 class LocalSentenceTransformerEmbeddingProvider:
@@ -96,7 +121,7 @@ class ChunkEmbedder:
 
     def save_to_chroma(self, chunks: list[ChunkRecord]) -> None:
         print(self.chroma_store)
-        print(json.dumps(self.chroma_store, indent=4))
+        #print(json.dumps(self.chroma_store, indent=4))
         if self.chroma_store is None:
             return
         self.chroma_store.save_chunks(chunks)

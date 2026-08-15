@@ -1,12 +1,30 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Optional
 from weakref import WeakKeyDictionary
-
+from pydantic import Field
 
 _EMBEDDING_CACHE: WeakKeyDictionary[object, Optional[list[float]]] = WeakKeyDictionary()
 
+@dataclass(slots=True)
+class MetadataFact:
+    key: str = Field(
+        description=(
+            "A lowercase snake_case name describing one explicit, "
+            "searchable fact from the chunk, such as company_name, business_unit, period, "
+            "employee_name, university, department, job_title, location, policy_name, "
+            "effective_date, certification, or project_name, etc."
+        )
+    )
+
+    value: str = Field(
+        description=(
+            "The exact value of the fact as stated in the source text. "
+            "Preserve proper-name capitalization. Do not summarize, "
+            "generalize, infer, or invent the value."
+        )
+    )
 
 @dataclass(slots=True)
 class ChunkRecord:
@@ -14,20 +32,35 @@ class ChunkRecord:
 
     document_name: str
     chunk_index: int
-    chunk_text: str = field(
+    chunk_text: str = Field(
         default="",
         metadata={"description": "The original text of this chunk from the provided document, exactly as is, not changed in any way"},
     )
     word_count: int = 0
-    headline: str = field(
+    headline: str = Field(
         default="",
         metadata={"description": "A brief heading for this chunk, typically a few words, that is most likely to be surfaced in a query"},
     )
-    summary: str = field(
+    summary: str = Field(
         default="",
         metadata={"description": "A few sentences summarizing the content of this chunk to answer common questions"},
     )
-    embedding: Optional[list[float]] = field(default=None, repr=False)
+
+    metadata_facts: list[MetadataFact] = Field(
+        default_factory=list,
+        metadata={
+            "description": (
+                "All explicit, useful facts in this chunk that may be used "
+                "for exact filtering. Extract one item per fact. This list "
+                "must not be empty when the chunk contains a person name, "
+                "organization, university, department, location, date, "
+                "identifier, policy name, certification, project name, "
+                "job title, or similar searchable entity. Return an empty "
+                "list only when no such explicit facts exist."
+            )
+        },
+    )
+    embedding: Optional[list[float]] = Field(default=None, repr=False)
 
     def __getattribute__(self, name: str) -> Any:
         if name == "embedding":
@@ -59,4 +92,4 @@ class IngestionResult:
     chunks: list[ChunkRecord]
 
 
-__all__ = ["ChunkRecord", "IngestionResult"]
+__all__ = ["ChunkRecord", "IngestionResult", "MetadataFact"]

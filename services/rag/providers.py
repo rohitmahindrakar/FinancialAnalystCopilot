@@ -24,6 +24,7 @@ class ModelProvider:
         external_model: Optional[str] = None,
         use_external_model: bool = False,
         temperature: float = 0.1,
+        tokenSize: Optional[int] = 500,
     ) -> None:
         self.model = model
         self.ollama_url = ollama_url
@@ -35,8 +36,9 @@ class ModelProvider:
         self.external_model = external_model or os.getenv("OPENAI_MODEL") or model
         self.use_external_model = use_external_model or self.provider == "openai"
         self.temperature = temperature
+        self.tokenSize = tokenSize
 
-    async def _call_ollama(self, document_name: str, text: str) -> str:
+    async def _call_ai_chunk_text(self, document_name: str, text: str) -> str:
         if self.use_external_model:
             return await self._call_external_model(document_name, text)
         return await self._call_local_ollama(document_name, text)
@@ -99,23 +101,147 @@ class ModelProvider:
             return ""
 
     def _build_prompt(self, document_name: str, text: str) -> str:
-        preview = text[:20000]
+        #preview = text[:20000]
         return f"""You are a document chunking assistant for RAG.
 
                 Task:
                 - Split the document named '{document_name}' into overlapping text chunks.
-                - Aim for an average chunk size of 100 words.
-                - Make adjacent chunks overlap by about 20 words.
+                - Aim for an average chunk size of '{self.tokenSize}' words.
+                - Make adjacent chunks overlap by about {self.tokenSize // 10} words.
                 - Preserve the original wording and meaning.
                 - Do not return code.
-                - Return only valid JSON in the following structure:
-                [
-                  {{"headline": "short heading", "summary": "one or two sentence summary", "chunk": "chunk text here", "word_count": 100}},
-                  {{"headline": "short heading", "summary": "one or two sentence summary", "chunk": "chunk text here", "word_count": 95}}
-                ]
+                - For each chunk, you should provide a headline, a summary, original text, and the metadata extracted from the chunk.
+                - Together your chunks should represent the entire document with overlap.
+                - Output format
+
+                    Return only valid JSON.
+
+                    Do not return Markdown, code fences, comments, explanations, introductory text, or trailing text.
+
+                    Return a JSON object with one property named chunks.
+
+                    The chunks property must contain an array of chunk objects.
+
+                    Each chunk object must contain exactly these properties:
+
+                    headline
+                    summary
+                    chunk_text
+                    metadata_facts
+
+                    Use this exact structure:
+
+                    {{
+                    "chunks": [
+                    {{
+                    "headline": "string",
+                    "summary": "string",
+                    "chunk_text": "string",
+                    "word_count": "integer",
+                    "metadata_facts": {{
+                    "key": "value"
+                    }}
+                    }}
+                    ]
+                    }}
+
+                Validation checklist
+
+                Before returning the response, verify that:
+
+                The response is valid JSON.
+                The root object contains only the chunks property.
+                Every chunk contains exactly headline, summary, chunk_text, and metadata_facts.
+                Every metadata_facts value is a dictionary object.
+                metadata_facts keys use lowercase snake_case.
+                metadata_facts contains only facts explicitly supported by the chunk.
+                Make sure important named entities have not been removed or generalized.
+                chunk_text exactly matches text from the source document.
+                Separate employees or unrelated topics have not been mixed.
+                The chunks collectively cover the document.
+                No commentary appears outside the JSON.
+
+                Metadata requirements
+
+                The metadata_facts property must be a dictionary object containing structured facts explicitly stated in the chunk.
+
+                Represent each fact as a meaningful key-value pair.
+
+                Use lowercase snake_case keys.
+
+                Examples of useful keys include:
+                - company name
+                - business unit
+                - period
+                - university
+                - job title
+                - current salary
+                - employee id
+                - date of birth
+
+                Use the most specific key that accurately describes the fact.
+
+                Example metadata:
+
+                {{
+                "employee_name": "Alice Johnson",
+                "job_title": "Data Scientist",
+                "universities": [
+                "Carnegie Mellon University"
+                ],
+                "degrees": [
+                "Master of Science"
+                ],
+                "section": "Education"
+                }}
+
+                Facts that must be extracted when present
+
+                Extract the following whenever they explicitly appear:
+
+                Company names → company_name or organization
+                Business units → business_unit
+                Person names → employee_name or person_name
+                Analyst names → analyst_name
+                Employee identifiers → employee_id
+                Universities and schools → university
+                Departments → department
+                Job titles → job_title
+                Companies and organizations → organization
+                Office or geographic locations → location
+                Degrees → degree
+                Certifications → certification
+                Projects → project_name
+                Products → product_name
+                Policies → policy_name
+                Dates → a specific key such as effective_date, start_date, or graduation_date
+                Document sections → section
+                Other exact identifiers → a descriptive lowercase snake_case key
+                
+                Metadata rules
+                Use one metadata_facts entry for each fact.
+                Use lowercase snake_case keys.
+                Use the same key consistently across chunks.
+                Preserve exact capitalization for proper-name values.
+                Extract only information explicitly supported by the chunk or its directly applicable parent heading.
+                Do not infer, guess, classify, or invent facts.
+                Do not put summaries or complete paragraphs in metadata.
+                Do not omit a fact merely because it already appears in the headline or summary.
+                Multiple facts may use the same key.
+                Do not add a key when its value is unknown.
+                Use strings for single values.
+                Use arrays for multiple values of the same type.
+                Use numbers only when the source clearly expresses a numeric value.
+                Use booleans only when the source explicitly expresses a true-or-false fact.
+                Do not place summaries, explanations, or complete paragraphs in metadata.
+                Do not use vague keys such as data, info, value, or other.
+                Use consistent keys for the same type of fact across all chunks.
+                Do not include source or type unless those values are explicitly provided as part of the document content; they will be added separately by the application.
+                When no useful structured facts are present, return an empty metadata object.
+
 
                 Document content:
-                {preview}
+                {text}
                 """
 
 

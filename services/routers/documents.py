@@ -20,7 +20,7 @@ router = APIRouter()
 
 
 @router.get("/source-documents")
-def list_source_documents(
+async def list_source_documents(
     limit: int = Query(25, ge=1, le=200),
     offset: int = Query(0, ge=0),
     document_type: str | None = None,
@@ -28,7 +28,7 @@ def list_source_documents(
     db: DatabaseConnection = Depends(get_database_connection),
 ) -> Any:
     dao = SourceDocumentDAO(db)
-    results = dao.search(
+    results = await dao.search(
         {
             "document_type": document_type,
             "source_category": source_category,
@@ -40,43 +40,43 @@ def list_source_documents(
 
 
 @router.get("/source-documents/{source_document_id}")
-def get_source_document(source_document_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
+async def get_source_document(source_document_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
     dao = SourceDocumentDAO(db)
-    record = dao.get_by_id(source_document_id)
+    record = await dao.get_by_id(source_document_id)
     if not record:
         raise HTTPException(status_code=404, detail="Source document not found")
     return record
 
 
 @router.post("/source-documents", status_code=201)
-def create_source_document(payload: SourceDocumentCreate, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
+async def create_source_document(payload: SourceDocumentCreate, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
     dao = SourceDocumentDAO(db)
-    source_document_id = dao.create_from_model(payload)
+    source_document_id = await dao.create_from_model(payload)
     return {"source_document_id": source_document_id}
 
 
 @router.put("/source-documents/{source_document_id}")
-def update_source_document(
+async def update_source_document(
     source_document_id: int,
     payload: SourceDocumentUpdate,
     db: DatabaseConnection = Depends(get_database_connection),
 ) -> Any:
     dao = SourceDocumentDAO(db)
-    if not dao.update(source_document_id, payload):
+    if not await dao.update(source_document_id, payload):
         raise HTTPException(status_code=404, detail="Source document not found")
     return {"source_document_id": source_document_id}
 
 
 @router.delete("/source-documents/{source_document_id}", status_code=204)
-def delete_source_document(source_document_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Response:
+async def delete_source_document(source_document_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Response:
     dao = SourceDocumentDAO(db)
-    if not dao.delete_by_id(source_document_id):
+    if not await dao.delete_by_id(source_document_id):
         raise HTTPException(status_code=404, detail="Source document not found")
     return Response(status_code=204)
 
 
 @router.get("/answer-citations")
-def list_answer_citations(
+async def list_answer_citations(
     limit: int = Query(25, ge=1, le=200),
     offset: int = Query(0, ge=0),
     query_id: int | None = None,
@@ -86,7 +86,7 @@ def list_answer_citations(
     db: DatabaseConnection = Depends(get_database_connection),
 ) -> Any:
     dao = AnswerCitationDAO(db)
-    results = dao.search(
+    results = await dao.search(
         {
             "query_id": query_id,
             "source_document_id": source_document_id,
@@ -100,43 +100,43 @@ def list_answer_citations(
 
 
 @router.get("/answer-citations/{citation_id}")
-def get_answer_citation(citation_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
+async def get_answer_citation(citation_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
     dao = AnswerCitationDAO(db)
-    record = dao.get_by_id(citation_id)
+    record = await dao.get_by_id(citation_id)
     if not record:
         raise HTTPException(status_code=404, detail="Answer citation not found")
     return record
 
 
 @router.post("/answer-citations", status_code=201)
-def create_answer_citation(payload: AnswerCitationCreate, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
+async def create_answer_citation(payload: AnswerCitationCreate, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
     dao = AnswerCitationDAO(db)
-    citation_id = dao.create_from_model(payload)
+    citation_id = await dao.create_from_model(payload)
     return {"citation_id": citation_id}
 
 
 @router.put("/answer-citations/{citation_id}")
-def update_answer_citation(
+async def update_answer_citation(
     citation_id: int,
     payload: AnswerCitationUpdate,
     db: DatabaseConnection = Depends(get_database_connection),
 ) -> Any:
     dao = AnswerCitationDAO(db)
-    if not dao.update(citation_id, payload):
+    if not await dao.update(citation_id, payload):
         raise HTTPException(status_code=404, detail="Answer citation not found")
     return {"citation_id": citation_id}
 
 
 @router.delete("/answer-citations/{citation_id}", status_code=204)
-def delete_answer_citation(citation_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Response:
+async def delete_answer_citation(citation_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Response:
     dao = AnswerCitationDAO(db)
-    if not dao.delete_by_id(citation_id):
+    if not await dao.delete_by_id(citation_id):
         raise HTTPException(status_code=404, detail="Answer citation not found")
     return Response(status_code=204)
 
 
 @router.get("/document-chunks")
-def list_document_chunks(
+async def list_document_chunks(
     limit: int = Query(25, ge=1, le=200),
     offset: int = Query(0, ge=0),
     source_document_id: int | None = None,
@@ -144,7 +144,7 @@ def list_document_chunks(
     db: DatabaseConnection = Depends(get_database_connection),
 ) -> Any:
     dao = DocumentChunkDAO(db)
-    results = dao.search(
+    results = await dao.search(
         {
             "source_document_id": source_document_id,
             "chunk_type": chunk_type,
@@ -156,36 +156,36 @@ def list_document_chunks(
 
 
 @router.get("/document-chunks/{chunk_id}")
-def get_document_chunk(chunk_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
+async def get_document_chunk(chunk_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
     dao = DocumentChunkDAO(db)
-    record = dao.get_by_id(chunk_id)
+    record = await dao.get_by_id(chunk_id)
     if not record:
         raise HTTPException(status_code=404, detail="Document chunk not found")
     return record
 
 
 @router.post("/document-chunks", status_code=201)
-def create_document_chunk(payload: DocumentChunkCreate, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
+async def create_document_chunk(payload: DocumentChunkCreate, db: DatabaseConnection = Depends(get_database_connection)) -> Any:
     dao = DocumentChunkDAO(db)
-    chunk_id = dao.create_from_model(payload)
+    chunk_id = await dao.create_from_model(payload)
     return {"chunk_id": chunk_id}
 
 
 @router.put("/document-chunks/{chunk_id}")
-def update_document_chunk(
+async def update_document_chunk(
     chunk_id: int,
     payload: DocumentChunkUpdate,
     db: DatabaseConnection = Depends(get_database_connection),
 ) -> Any:
     dao = DocumentChunkDAO(db)
-    if not dao.update(chunk_id, payload):
+    if not await dao.update(chunk_id, payload):
         raise HTTPException(status_code=404, detail="Document chunk not found")
     return {"chunk_id": chunk_id}
 
 
 @router.delete("/document-chunks/{chunk_id}", status_code=204)
-def delete_document_chunk(chunk_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Response:
+async def delete_document_chunk(chunk_id: int, db: DatabaseConnection = Depends(get_database_connection)) -> Response:
     dao = DocumentChunkDAO(db)
-    if not dao.delete_by_id(chunk_id):
+    if not await dao.delete_by_id(chunk_id):
         raise HTTPException(status_code=404, detail="Document chunk not found")
     return Response(status_code=204)

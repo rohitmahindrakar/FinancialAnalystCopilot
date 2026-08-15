@@ -34,8 +34,8 @@ class ChunkingHelper:
         if isinstance(parsed, list):
             chunks: list[dict[str, Any]] = []
             for item in parsed:
-                if isinstance(item, dict) and isinstance(item.get("chunk"), str):
-                    chunk_text = item["chunk"].strip()
+                if isinstance(item, dict) and isinstance(item.get("chunk_text"), str):
+                    chunk_text = item["chunk_text"].strip()
                     if chunk_text:
                         chunks.append(
                             {
@@ -43,6 +43,7 @@ class ChunkingHelper:
                                 "word_count": int(item.get("word_count") or len(chunk_text.split())),
                                 "headline": str(item.get("headline", "")).strip(),
                                 "summary": str(item.get("summary", "")).strip(),
+                                "metadata_facts": {fact.get("key"): fact.get("value") for fact in item.get("metadata_facts", []) if isinstance(fact, dict) and "key" in fact and "value" in fact},
                             }
                         )
             return chunks
@@ -50,8 +51,8 @@ class ChunkingHelper:
         if isinstance(parsed, dict) and isinstance(parsed.get("chunks"), list):
             chunks = []
             for item in parsed["chunks"]:
-                if isinstance(item, dict) and isinstance(item.get("chunk"), str):
-                    chunk_text = item["chunk"].strip()
+                if isinstance(item, dict) and isinstance(item.get("chunk_text"), str):
+                    chunk_text = item["chunk_text"].strip()
                     if chunk_text:
                         chunks.append(
                             {
@@ -59,6 +60,7 @@ class ChunkingHelper:
                                 "word_count": int(item.get("word_count") or len(chunk_text.split())),
                                 "headline": str(item.get("headline", "")).strip(),
                                 "summary": str(item.get("summary", "")).strip(),
+                                "metadata_facts": {fact.get("key"): fact.get("value") for fact in item.get("metadata_facts", []) if isinstance(fact, dict) and "key" in fact and "value" in fact},
                             }
                         )
             return chunks
@@ -90,6 +92,7 @@ class ChunkingHelper:
                     word_count=len(chunk_words),
                     headline=f"Chunk {index + 1}",
                     summary="Auto-generated chunk from the source document.",
+                    metadata_facts=[],
                 )
             )
 
@@ -102,6 +105,7 @@ class ChunkingHelper:
                     word_count=len(words),
                     headline="Document Overview",
                     summary="Auto-generated overview chunk for the source document.",
+                    metadata_facts=[],
                 )
             )
 

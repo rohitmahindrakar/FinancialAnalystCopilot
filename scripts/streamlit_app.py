@@ -124,6 +124,30 @@ with st.sidebar:
         if st.button(sample, key=f"sample_{idx}", use_container_width=True):
             st.session_state.pending_question = sample
 
+    #add a button to call a backend API \chunk-documents\{internal}, and shows the streaming response below the button
+    st.markdown("**Chunk documents**")
+    if st.button("📄 Chunk documents", use_container_width=True):
+        internal = st.checkbox("Use internal model", value=False)
+        response = requests.get(f"{api_base_url.rstrip('/')}/orchestrator/chunk-documents/{internal}", stream=True)
+        for line in response.iter_lines():
+            if line:
+                #write a method to capture the streaming response json, that has the format {"event": "status", "data": {"message": "chunking in progress"}}, and displays it in a block below the button, and if the event is "final", display the final message in a success message box
+                try:
+                    decoded_line = line.decode("utf-8")
+                    parsed_line = json.loads(decoded_line)
+                    event = parsed_line.get("event")
+                    data = parsed_line.get("data", {})
+                    message = data.get("message", "")
+                    if event == "status":
+                        st.info(message)
+                    elif event == "final":
+                        st.success(message)
+                except json.JSONDecodeError:
+                    st.error(f"Failed to decode JSON from line: {line}")
+                except Exception as e:
+                    st.error(f"An error occurred while processing the line: {e}")
+                #st.text(line.decode("utf-8"))
+                
     st.divider()
     if st.button("🗑️ Clear conversation", use_container_width=True):
         st.session_state.history = []
@@ -174,6 +198,10 @@ def stream_orchestrator_response(response: requests.Response, status: Any) -> st
             message = payload.get("message", "")
             stage = payload.get("stage", "")
             reasoning = payload.get("reasoning")
+
+            if st.session_state.conversation_id is None and payload.get("conversation_id") is not None:
+                st.session_state.conversation_id = payload.get("conversation_id")
+
             if stage == "planning_update" and reasoning:
                 text = f"Planning: {reasoning}"
             elif stage and message:
@@ -197,27 +225,30 @@ def stream_orchestrator_response(response: requests.Response, status: Any) -> st
         elif line.startswith("data:"):
             data_lines.append(line.split(":", 1)[1].strip())
         elif not line.strip() and event_name is not None and data_lines:
-            handle_event(event_name, json.loads("".join(data_lines)))
+            json_str = ''.join(data_lines)#.replace("'", '"')
+            handle_event(event_name, json.loads(json_str))
             event_name = None
             data_lines = []
 
     if event_name is not None and data_lines:
-        handle_event(event_name, json.loads("".join(data_lines)))
+        json_str = ''.join(data_lines).replace("'", '"')
+        handle_event(event_name, json.loads(json_str))
 
     return final_answer
 
 
 def ask_orchestrator(user_question: str, status: Any) -> str:
     try:
-        conversation_history = [
-            {"role": item["role"], "content": item["text"]} for item in st.session_state.history[:-1]
-        ]
+        # conversation_history = [
+        #     {"role": item["role"], "content": item["text"]} for item in st.session_state.history[:-1]
+        # ]
         response = requests.post(
             f"{api_base_url.rstrip('/')}/orchestrator/ask-openai",
             json={
                 "user_question": user_question,
                 "api_base_url": api_base_url,
-                "conversation_history": conversation_history,
+                #"conversation_history": conversation_history,
+                "conversation_id": st.session_state.conversation_id
             },
             stream=True,
             timeout=120,
@@ -237,6 +268,7 @@ def ask_orchestrator(user_question: str, status: Any) -> str:
 if not st.session_state.welcome_loaded:
     st.session_state.history.append({"role": "assistant", "text": fetch_welcome_message()})
     st.session_state.welcome_loaded = True
+    st.session_state.conversation_id = None
 
 for item in st.session_state.history:
     avatar = USER_AVATAR if item["role"] == "user" else ASSISTANT_AVATAR

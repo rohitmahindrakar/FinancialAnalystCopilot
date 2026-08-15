@@ -31,7 +31,7 @@ class BaseDAO:
     def _filter_values(self, values: Dict[str, Any]) -> Dict[str, Any]:
         return {key: value for key, value in values.items() if key in self.columns and value is not None}
 
-    def create(self, values: Union[Dict[str, Any], object]) -> int:
+    async def create(self, values: Union[Dict[str, Any], object]) -> int:
         normalized = _normalize_values(values)
         filtered = self._filter_values(normalized)
         if not filtered:
@@ -41,23 +41,23 @@ class BaseDAO:
         placeholders = ", ".join("?" for _ in filtered)
         sql = f"INSERT INTO {self.table_name} ({column_names}) VALUES ({placeholders})"
 
-        with self.db.session() as connection:
+        async with self.db.session() as connection:
             cursor = connection.execute(sql, tuple(filtered.values()))
             return cursor.lastrowid
 
-    def get_by_id(self, record_id: int) -> Optional[Dict[str, Any]]:
+    async def get_by_id(self, record_id: int) -> Optional[Dict[str, Any]]:
         sql = f"SELECT * FROM {self.table_name} WHERE {self.primary_key} = ?"
-        with self.db.session() as connection:
+        async with self.db.session() as connection:
             row = connection.execute(sql, (record_id,)).fetchone()
             return _row_to_dict(row)
 
-    def list_all(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+    async def list_all(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
         sql = f"SELECT * FROM {self.table_name} ORDER BY {self.primary_key} LIMIT ? OFFSET ?"
-        with self.db.session() as connection:
+        async with self.db.session() as connection:
             rows = connection.execute(sql, (limit, offset)).fetchall()
             return [dict(row) for row in rows]
 
-    def update(self, record_id: int, values: Union[Dict[str, Any], object]) -> bool:
+    async def update(self, record_id: int, values: Union[Dict[str, Any], object]) -> bool:
         normalized = _normalize_values(values)
         filtered = self._filter_values(normalized)
         if not filtered:
@@ -66,32 +66,32 @@ class BaseDAO:
         assignments = ", ".join(f"{column} = ?" for column in filtered)
         sql = f"UPDATE {self.table_name} SET {assignments} WHERE {self.primary_key} = ?"
 
-        with self.db.session() as connection:
+        async with self.db.session() as connection:
             cursor = connection.execute(sql, tuple(filtered.values()) + (record_id,))
             return cursor.rowcount > 0
 
-    def create_from_model(self, model: object) -> int:
-        return self.create(model)
+    async def create_from_model(self, model: object) -> int:
+        return await self.create(model)
 
-    def update_from_model(self, record_id: int, model: object) -> bool:
-        return self.update(record_id, model)
+    async def update_from_model(self, record_id: int, model: object) -> bool:
+        return await self.update(record_id, model)
 
-    def delete_by_id(self, record_id: int) -> bool:
+    async def delete_by_id(self, record_id: int) -> bool:
         sql = f"DELETE FROM {self.table_name} WHERE {self.primary_key} = ?"
-        with self.db.session() as connection:
+        async with self.db.session() as connection:
             cursor = connection.execute(sql, (record_id,))
             return cursor.rowcount > 0
 
-    def search(self, filters: Dict[str, Any], limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+    async def search(self, filters: Dict[str, Any], limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
         filtered = {key: value for key, value in filters.items() if key in self.columns and value is not None}
         if not filtered:
-            return self.list_all(limit=limit, offset=offset)
+            return await self.list_all(limit=limit, offset=offset)
 
         conditions = " AND ".join(f"{key} = ?" for key in filtered)
         parameters = tuple(filtered.values()) + (limit, offset)
         sql = f"SELECT * FROM {self.table_name} WHERE {conditions} ORDER BY {self.primary_key} LIMIT ? OFFSET ?"
 
-        with self.db.session() as connection:
+        async with self.db.session() as connection:
             rows = connection.execute(sql, parameters).fetchall()
             return [dict(row) for row in rows]
 
@@ -378,3 +378,56 @@ class UserFeedbackDAO(BaseDAO):
                 "created_timestamp",
             ],
         )
+
+class ConversationHistoryDAO(BaseDAO):
+    def __init__(self, db: DatabaseConnection) -> None:
+        super().__init__(
+            db,
+            table_name="conversation_history",
+            primary_key="id",
+            #unique_constraints=["conversation_id", "sequence_no"],
+            #indexes=["conversation_id", "sequence_no"],
+            columns=[
+                "id",
+                "conversation_id",
+                "sequence_no",
+                "item_type",
+                "role",
+                "item_json",
+                "created_at",
+            ],
+        )
+
+    async def get_by_conversation_id(self, conversation_id: str) -> list[Dict[str, Any]]:
+        sql = f"SELECT * FROM {self.table_name} WHERE conversation_id = ? ORDER BY sequence_no"
+        async with self.db.session() as connection:
+            rows = connection.execute(sql, (conversation_id,)).fetchall()
+            return [_row_to_dict(row) for row in rows]
+
+    #write a method to delete all records for a given conversation_id
+    async def delete_by_conversation_id(self, conversation_id: str) -> None:
+        sql = f"DELETE FROM {self.table_name} WHERE conversation_id = ?"
+        async with self.db.session() as connection:
+            connection.execute(sql, (conversation_id,))
+
+    #write a method to delete the most recent record for a given conversation_id based on the highest sequence_no
+    async def delete_most_recent_by_conversation_id(self, conversation_id: str) -> None:
+        sql = f"""
+            DELETE FROM {self.table_name}
+            WHERE id = (
+                SELECT id FROM {self.table_name}
+                WHERE conversation_id = ?
+                ORDER BY sequence_no DESC
+                LIMIT 1
+            )
+        """
+        async with self.db.session() as connection:
+            connection.execute(sql, (conversation_id,))
+
+    async def get_next_sequence_no(self, conversation_id: str) -> Optional[int]:
+        sql = f"SELECT MAX(sequence_no) as max_sequence_no FROM {self.table_name} WHERE conversation_id = ?"
+        async with self.db.session() as connection:
+            row = connection.execute(sql, (conversation_id,)).fetchone()
+            if row and row["max_sequence_no"] is not None:
+                return int(row["max_sequence_no"]) + 1
+            return 1

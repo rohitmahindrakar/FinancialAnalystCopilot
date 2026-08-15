@@ -324,3 +324,21 @@ class UserFeedbackUpdate(BaseModel):
     rating: Optional[str] = None
     confidence_score: Optional[int] = Field(default=None, ge=1, le=5)
     comment: Optional[str] = None
+
+class ConversationHistoryCreate(BaseModel):
+    id: Optional[int] = None
+    conversation_id: str
+    sequence_no: int
+    item_type: str
+    role: str
+    item_json: str
+    created_at: Optional[str] = None
+
+class ConversationHistoryUpdate(BaseModel):
+    id: Optional[int] = None
+    conversation_id: str
+    sequence_no: int
+    item_type: Optional[str] = None
+    role: Optional[str] = None
+    item_json: Optional[str] = None
+    created_at: Optional[str] = None

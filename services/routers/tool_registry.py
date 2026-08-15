@@ -6,7 +6,7 @@ from typing import Any, Callable
 from agents import function_tool
 from fastapi import HTTPException
 
-from services.orchestration import invoke_tool_route
+from services.orchestration_old import invoke_tool_route
 
 
 APP_ALLOWED_TOOL_PATHS = {
@@ -45,22 +45,7 @@ APP_ALLOWED_TOOL_PATHS = {
     "/evaluation-test-cases/{test_case_id}",
 }
 
-OPENAI_TOOL_NAME_TO_ROUTE = {
-    "functions.query_finance_chunks": {"path": "/chroma/query-finance", "method": "POST"},
-    "functions.list_finance_actuals": {"path": "/finance/actuals", "method": "GET"},
-    "functions.list_finance_budgets": {"path": "/finance/budgets", "method": "GET"},
-    "functions.list_finance_forecasts": {"path": "/finance/forecasts", "method": "GET"},
-    "functions.rewrite_query": {"path": "/chroma/query-finance", "method": "POST"},
-    "functions.expand_query": {"path": "/chroma/query-finance", "method": "POST"},
-    "functions.rerank_query_results": {"path": "/chroma/query-finance", "method": "POST"},
-    "query_finance_chunks": {"path": "/chroma/query-finance", "method": "POST"},
-    "list_finance_actuals": {"path": "/finance/actuals", "method": "GET"},
-    "list_finance_budgets": {"path": "/finance/budgets", "method": "GET"},
-    "list_finance_forecasts": {"path": "/finance/forecasts", "method": "GET"},
-    "rewrite_query": {"path": "/chroma/query-finance", "method": "POST"},
-    "expand_query": {"path": "/chroma/query-finance", "method": "POST"},
-    "rerank_query_results": {"path": "/chroma/query-finance", "method": "POST"},
-}
+OPENAI_TOOL_NAME_TO_ROUTE: dict[str, dict[str, str]] = {}
 
 
 class OrchestratorToolRegistry:
@@ -155,25 +140,29 @@ ROUTER_TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "tool_name": "query_finance_chunks",
         "method": "POST",
         "path": "/chroma/query-finance",
-        "description": "Query the Chroma finance document index for contextual passages.",
+        "description": "Query the Chroma finance document index for contextual passages. After this tool is called, the tool - rerank_query_results, has to be called.",
+        "arguments": {
+            "query": "The search query for finance documents.",
+            "metadata_filters": "Additional meta data filters, to search the knowledge base  on specific key value pairs.",
+        },
     },
     {
         "tool_name": "rewrite_query",
         "method": "POST",
-        "path": "/chroma/query-finance",
-        "description": "Rewrite a user question into clearer, more retrieval-friendly queries before searching the knowledge base.",
+        "path": "/orchestrator/rewrite-query",
+        "description": "Call this tool, if no data was returned when Chroma was queried to get finance data. This tool will rewrite a user question into clearer, more retrieval-friendly query, also will return metadata around facts in the question to be used when searching the knowledge base again. Once this tool is called to rewrite the question, the tool - query_finance_chunks, should be called again, to get the results from the knowledge base again.",
     },
-    {
-        "tool_name": "expand_query",
-        "method": "POST",
-        "path": "/chroma/query-finance",
-        "description": "Expand a user query with synonyms and related finance terms to improve recall and reduce vocabulary mismatch.",
-    },
+    # {
+    #     "tool_name": "expand_query",
+    #     "method": "POST",
+    #     "path": "/chroma/query-finance",
+    #     "description": "Expand a user query with synonyms and related finance terms to improve recall and reduce vocabulary mismatch.",
+    # },
     {
         "tool_name": "rerank_query_results",
         "method": "POST",
-        "path": "/chroma/query-finance",
-        "description": "Re-rank retrieved chunks so the most contextually relevant finance passages appear first.",
+        "path": "/orchestrator/rerank-chunks",
+        "description": "This tool must be called after a call to the tool - query_finance_chunks. This tool Re-ranks retrieved chunks from the tool - query_finance_chunks, so that the most contextually relevant finance passages appear first.",
     },
     {
         "tool_name": "list_accounts",
@@ -626,3 +615,19 @@ ROUTER_TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "description": "Delete an evaluation test case by test_case_id.",
     },
 ]
+
+
+def _build_openai_tool_name_to_route() -> dict[str, dict[str, str]]:
+    mapping: dict[str, dict[str, str]] = {}
+    for definition in ROUTER_TOOL_DEFINITIONS:
+        tool_name = str(definition["tool_name"])
+        route = {
+            "path": str(definition["path"]),
+            "method": str(definition["method"]).upper(),
+        }
+        mapping[tool_name] = route
+        mapping[f"functions.{tool_name}"] = route
+    return mapping
+
+
+OPENAI_TOOL_NAME_TO_ROUTE = _build_openai_tool_name_to_route()

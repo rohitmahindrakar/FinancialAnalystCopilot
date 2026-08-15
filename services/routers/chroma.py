@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
-from chromadb import PersistentClient
+from chromadb import PersistentClient, QueryResult, logger
 from chromadb.config import Settings
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+from services.models.models import ChromaQueryRequestParameters
+from services.rag.embeddings import OpenAIEmbeddingProvider
 
 router = APIRouter(prefix="/chroma", tags=["chroma"])
 
@@ -29,6 +31,10 @@ class ChromaQueryResult(BaseModel):
     document: str | None = None
     metadata: dict[str, Any] | None = None
     distance: float | None = None
+
+    collection_name: str = "finance_docs_chunks"
+    n_results: int = 5
+    embedding_provider: ClassVar[OpenAIEmbeddingProvider] = OpenAIEmbeddingProvider(model="text-embedding-3-large")
 
 
 def _normalize_query_text(text: str) -> str:
@@ -131,11 +137,137 @@ def _merge_query_results(
 
     return candidates[:n_results]
 
+#write a method that takes a query input, embeds it using text-embedding-3-large embedding model from OpenAI, searches the specified chroma collection, and returns the top N results for this query. The method should also handle optional query variants, expanded terms, and reranking of results based on relevance score.
+def query_chroma_collection(
+    self,
+    query: str
+) -> QueryResult:
+    if not query.strip():
+        raise ValueError("Query cannot be empty.")
 
+    client = PersistentClient(path=str(DEFAULT_CHROMA_DB_PATH), settings=Settings(anonymized_telemetry=False))
+
+    collection_names = [collection.name for collection in client.list_collections()]
+    if self.collection_name not in collection_names:
+        raise ValueError(f"Collection '{self.collection_name}' not found. Available collections: {collection_names}")
+
+    collection = client.get_collection(name=self.collection_name)
+
+    #write code to call embeddings.py to embed the query using text-embedding-3-large embedding model from OpenAI
+    query_embedding = self.embedding_provider.embed_texts([query])[0]
+
+    #variant_results: list[dict[str, Any]] = []
+    raw_results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=max(self.n_results, 3),
+        include=["documents", "metadatas", "distances"],
+    )
+
+    return raw_results
+    # variant_results.append(raw_results)
+
+    # merged_results = _merge_query_results(
+    #     {
+    #         "ids": [variant_result.get("ids", [[]])[0] for variant_result in variant_results],
+    #         "documents": [variant_result.get("documents", [[]])[0] for variant_result in variant_results],
+    #         "metadatas": [variant_result.get("metadatas", [[]])[0] for variant_result in variant_results],
+    #         "distances": [variant_result.get("distances", [[]])[0] for variant_result in variant_results],
+    #     },
+    #     query_variants=query_variants,
+    #     rerank=rerank,
+    #     n_results=n_results,
+    # )
+
+    # matched_chunks = []
+    # for result in merged_results:
+    #     matched_chunks.append(
+    #         {
+    #             "id": result.get("id"),
+    #             "document": result.get("document"),
+    #             "metadata": result.get("metadata"),
+    #             "distance": result.get("distance"),
+    #             "query_variant": result.get("query_variant"),
+    #             "relevance_score": result.get("relevance_score"),
+    #         }
+    #     )
+
+    # return {
+    #     "collection_name": collection_name,
+    #     "query": query,
+    #     "query_variants": query_variants,
+    #     "n_results": n_results,
+    #     "rerank
+    # }
+
+
+#write a method that takes a query input, embeds it using text-embedding-3-large embedding model from OpenAI, searches the specified chroma collection, and returns the top N results for this query.
+#this methods fetches unranked chunks. Also searches based on metadata filters if provided.
 @router.post("/query-finance")
+def query_finance_chunks_and_return_reranked_results(payload: ChromaQueryRequest) -> dict[str, Any]:
+    result = query_chroma_collection_new(payload)
+
+    #call method to rerank the results based on relevance score
+    result = reranked_query_results(result, payload.query)
+
+    return result
+
+
+def query_chroma_collection_new(
+    arguments: ChromaQueryRequestParameters
+) -> dict[str, Any]:
+
+    #TODO: keep this parameters here for now, but later consider making these configurable through an API
+    collection_name: str = "finance_docs_chunks"
+    n_results: int = 20
+
+    query = arguments.query
+    metadata_filters = arguments.metadata_filters
+    if not query.strip():
+        raise ValueError("Query cannot be empty.")
+
+    client = PersistentClient(path=str(DEFAULT_CHROMA_DB_PATH), settings=Settings(anonymized_telemetry=False))
+
+    collection_names = [collection.name for collection in client.list_collections()]
+    if collection_name not in collection_names:
+        raise ValueError(f"Collection '{collection_name}' not found. Available collections: {collection_names}")
+
+    collection = client.get_collection(name=collection_name)
+
+    # Embed the query using text-embedding-3-large embedding model from OpenAI
+    # Use the module-level embedding provider defined on `ChromaQueryResult`
+    query_embedding = ChromaQueryResult.embedding_provider.embed_texts([query])[0]
+
+    # Search the specified Chroma collection
+    if(metadata_filters is None or not metadata_filters):
+        raw_results = collection.query(
+            query_embeddings=[query_embedding],
+            n_results=max(n_results, 3),
+            include=["documents", "metadatas", "distances"],
+        )
+    else:
+        raw_results = collection.query(
+            query_embeddings=[query_embedding],
+            n_results=max(n_results, 3),
+            include=["documents", "metadatas", "distances"],
+            where=metadata_filters
+        )
+
+    return raw_results
+
+def reranked_query_results(
+    raw_results: dict[str, Any],
+    query: str
+) -> dict[str, Any]:
+
+    
+    
+    return raw_results
+
+# @router.post("/query-finance")
 def query_finance_chunks(payload: ChromaQueryRequest) -> dict[str, Any]:
     query_text = payload.query.strip()
     if not query_text:
+        logger.warning("Received empty query")
         raise HTTPException(status_code=422, detail="query cannot be empty")
 
     client = PersistentClient(path=str(DEFAULT_CHROMA_DB_PATH), settings=Settings(anonymized_telemetry=False))

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from services.routers.orchestrator import _rank_context_evidence
+from services.routers.orchestrator import rerank_context_evidence
 
 
 class StubClient:
@@ -28,7 +28,7 @@ def test_rank_context_evidence_orders_candidates_with_llm_feedback() -> None:
         {"id": "chunk-2", "document": "Management commentary explains the revenue growth drivers."},
     ]
 
-    ranked = _rank_context_evidence(
+    ranked = rerank_context_evidence(
         question="What drove revenue growth?",
         rewritten_queries=["revenue growth drivers", "company revenue performance"],
         expanded_terms=["revenue", "growth"],

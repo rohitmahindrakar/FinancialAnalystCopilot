@@ -48,3 +48,6 @@ python -m scripts.example_usage
 - New intent routing endpoints:
   - `GET /tools` — list available Ollama-enabled API tools
   - `POST /intent/route` — select the best tool for a user question via local Ollama
+
+- run the backend apis - .\.venv\Scripts\python.exe -m uvicorn services:app --reload;
+- run the streamlit front end - .\.venv\Scripts\streamlit.exe run scripts/streamlit_app.py
