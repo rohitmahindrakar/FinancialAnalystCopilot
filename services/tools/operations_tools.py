@@ -18,7 +18,7 @@ async def get_kpi_by_id(kpi_id: str) -> Any:
     )
 
 
-OPERATIONS_TOOLS = [
+KPI_TOOLS = [
     list_kpis,
     get_kpi_by_id,
 ]

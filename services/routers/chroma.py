@@ -7,14 +7,19 @@ from typing import Any, ClassVar
 from chromadb import PersistentClient, QueryResult, logger
 from chromadb.config import Settings
 from fastapi import APIRouter, HTTPException
+from litellm import completion
 from pydantic import BaseModel, Field
-from services.models.models import ChromaQueryRequestParameters
+from services.models.models import ChromaQueryRequestParameters, RankOrder, Result
 from services.rag.embeddings import OpenAIEmbeddingProvider
+
+from agents import trace, generation_span
 
 router = APIRouter(prefix="/chroma", tags=["chroma"])
 
 DEFAULT_CHROMA_DB_PATH = Path(os.getenv("CHROMA_PERSIST_DIR", "")) if os.getenv("CHROMA_PERSIST_DIR") else Path(__file__).resolve().parents[2] / "database" / "chroma"
 
+#openAI properties
+external_model: str = os.getenv("OPENAI_MODEL") or "gpt-4o-mini"
 
 class ChromaQueryRequest(BaseModel):
     query: str = Field(..., min_length=1, description="The question or phrase to search in the Chroma collection.")
@@ -35,7 +40,6 @@ class ChromaQueryResult(BaseModel):
     collection_name: str = "finance_docs_chunks"
     n_results: int = 5
     embedding_provider: ClassVar[OpenAIEmbeddingProvider] = OpenAIEmbeddingProvider(model="text-embedding-3-large")
-
 
 def _normalize_query_text(text: str) -> str:
     return " ".join(text.split())
@@ -203,65 +207,144 @@ def query_chroma_collection(
 #write a method that takes a query input, embeds it using text-embedding-3-large embedding model from OpenAI, searches the specified chroma collection, and returns the top N results for this query.
 #this methods fetches unranked chunks. Also searches based on metadata filters if provided.
 @router.post("/query-finance")
-def query_finance_chunks_and_return_reranked_results(payload: ChromaQueryRequest) -> dict[str, Any]:
+def query_finance_chunks_and_return_reranked_results(payload: ChromaQueryRequestParameters) -> list[Result]:
     result = query_chroma_collection_new(payload)
 
     #call method to rerank the results based on relevance score
-    result = reranked_query_results(result, payload.query)
+    reranked_result = rerank_query_results(result, payload.query)
 
-    return result
+    return reranked_result
 
 
 def query_chroma_collection_new(
     arguments: ChromaQueryRequestParameters
-) -> dict[str, Any]:
+) -> list[Result]:
 
-    #TODO: keep this parameters here for now, but later consider making these configurable through an API
-    collection_name: str = "finance_docs_chunks"
-    n_results: int = 20
+    try:
+        #TODO: keep this parameters here for now, but later consider making these configurable through an API
+        collection_name: str = "finance_docs_chunks"
+        n_results: int = 20
 
-    query = arguments.query
-    metadata_filters = arguments.metadata_filters
-    if not query.strip():
-        raise ValueError("Query cannot be empty.")
+        query = arguments.query
+        metadata_filters = arguments.metadata_filters
+        if not query.strip():
+            raise ValueError("Query cannot be empty.")
 
-    client = PersistentClient(path=str(DEFAULT_CHROMA_DB_PATH), settings=Settings(anonymized_telemetry=False))
+        client = PersistentClient(path=str(DEFAULT_CHROMA_DB_PATH), settings=Settings(anonymized_telemetry=False))
 
-    collection_names = [collection.name for collection in client.list_collections()]
-    if collection_name not in collection_names:
-        raise ValueError(f"Collection '{collection_name}' not found. Available collections: {collection_names}")
+        collection_names = [collection.name for collection in client.list_collections()]
+        if collection_name not in collection_names:
+            raise ValueError(f"Collection '{collection_name}' not found. Available collections: {collection_names}")
 
-    collection = client.get_collection(name=collection_name)
+        collection = client.get_collection(name=collection_name)
 
-    # Embed the query using text-embedding-3-large embedding model from OpenAI
-    # Use the module-level embedding provider defined on `ChromaQueryResult`
-    query_embedding = ChromaQueryResult.embedding_provider.embed_texts([query])[0]
+        # Embed the query using text-embedding-3-large embedding model from OpenAI
+        # Use the module-level embedding provider defined on `ChromaQueryResult`
+        query_embedding = ChromaQueryResult.embedding_provider.embed_texts([query])[0]
 
-    # Search the specified Chroma collection
-    if(metadata_filters is None or not metadata_filters):
-        raw_results = collection.query(
-            query_embeddings=[query_embedding],
-            n_results=max(n_results, 3),
-            include=["documents", "metadatas", "distances"],
-        )
-    else:
-        raw_results = collection.query(
-            query_embeddings=[query_embedding],
-            n_results=max(n_results, 3),
-            include=["documents", "metadatas", "distances"],
-            where=metadata_filters
-        )
+        # Search the specified Chroma collection
+        if(metadata_filters is None or not metadata_filters):
+            raw_results = collection.query(
+                query_embeddings=[query_embedding],
+                n_results=max(n_results, 3),
+                include=["documents", "metadatas", "distances"],
+            )
+        else:
+            raw_results = collection.query(
+                query_embeddings=[query_embedding],
+                n_results=max(n_results, 3),
+                include=["documents", "metadatas", "distances"],
+                where=metadata_filters
+            )
 
-    return raw_results
+        chunks: list[Result] = []
+        for result in zip(raw_results["documents"][0], raw_results["metadatas"][0]):
+            chunks.append(Result(page_content=result[0], metadata=result[1]))
+        return chunks
+    except Exception as exc:  # pragma: no cover - defensive path
+        print(f"External model request failed: {exc}")
+        return []
 
-def reranked_query_results(
-    raw_results: dict[str, Any],
+
+def rerank_query_results(
+    chunks: list[Result],
     query: str
-) -> dict[str, Any]:
+) -> list[Result]:
 
-    
-    
-    return raw_results
+    system_prompt = """
+        You are a document re-ranker.
+        You are provided with a question and a list of relevant chunks of text from a query of a knowledge base.
+        The chunks are provided in the order they were retrieved; this should be approximately ordered by relevance, but you may be able to improve on that.
+        You must rank order the provided chunks by relevance to the question, with the most relevant chunk first.
+        Reply only with the list of ranked chunk ids, nothing else. Include all the chunk ids you are provided with, reranked.
+        """
+    user_prompt = f"The user has asked the following question:\n\n{query}\n\nOrder all the chunks of text by relevance to the question, from most relevant to least relevant. Include all the chunk ids you are provided with, reranked.\n\n"
+    user_prompt += "Here are the chunks:\n\n"
+
+    for index, chunk in enumerate(chunks):
+        user_prompt += f"# CHUNK ID: {index + 1}:\n\n{chunk.page_content}\n\n"
+    user_prompt += "Reply only with the list of ranked chunk ids, nothing else."
+    prompt = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+
+    #make a call to openAI asking it to rerank the results based on relevance score. The prompt should include the query and the raw results. The response should be a list of chunk IDs in the order of relevance. write the call using litellm
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        #self.logger.error("OPENAI_API_KEY is not configured. Add it to your .env file.")
+        raise RuntimeError("OPENAI_API_KEY is not configured. Add it to your .env file.")
+
+    model_name = external_model
+    litellm_model = model_name if "/" in model_name else f"openai/{model_name}"
+
+    print("calling openAI to rerank the results based on relevance score using litellm...")
+
+    try:
+        with trace("LiteLLM Reranking"):
+
+            with generation_span(
+                input=prompt,
+                model=litellm_model
+            ) as span:
+
+                response = completion(
+                            model=litellm_model,
+                            api_key=api_key,
+                            api_base=os.getenv("OPENAI_API_BASE"),
+                            temperature=float(os.getenv("OPENAI_TEMPERATURE", 0.1)),
+                            timeout=int(os.getenv("OPENAI_TIMEOUT", 90)),
+                            messages=prompt,
+                            response_format=RankOrder
+                        )
+
+                span.span_data.output = [
+                    {
+                        "role": "assistant",
+                        "content": response.choices[0].message.content
+                    }
+                ]
+
+        #return response
+        
+
+        #response = asyncio.run(asyncio.gather(*task))
+        #content = response.choices[0].message.content if getattr(response, "choices", None) else None
+
+        reply = response.choices[0].message.content
+        print(f"response: {reply}")
+        order = RankOrder.model_validate_json(reply).order
+
+        #print a comparison of whether the order of the chunks has changed after reranking
+        original_order = list(range(1, len(chunks) + 1))
+        print(f"Original order: {original_order}")
+        print(f"Reranked order: {order}")
+
+        return [chunks[i - 1] for i in order]
+    except Exception as exc:  # pragma: no cover - defensive path
+        print(f"External model request failed: {exc}")
+        return f"External model request failed: {exc}"
 
 # @router.post("/query-finance")
 def query_finance_chunks(payload: ChromaQueryRequest) -> dict[str, Any]:

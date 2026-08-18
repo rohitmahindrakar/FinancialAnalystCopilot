@@ -6,7 +6,7 @@ from services.tools.api_calling import api_post
 
 @function_tool(strict_mode=False)
 async def query_finance_chunks(request: ChromaQueryRequestParameters) -> dict[str, Any]:
-    """Query finance chunks from the local Chroma DB."""
+    """Query finance chunks from the local Chroma DB. The chunks include company information, financial data, quarterly reports, conversations, and other relevant information. Query is performed using the provided parameters, and relevant chunks of data are returned."""
     return await api_post(
         "/chroma/query-finance",
         request.model_dump(),

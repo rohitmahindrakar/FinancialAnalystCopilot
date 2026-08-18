@@ -1,24 +1,21 @@
-from datetime import datetime
 import logging
 import uuid
 
 from typing import Any
 from agents import Agent, MaxTurnsExceeded, ModelSettings, OpenAIResponsesModel, Runner
 from fastapi import HTTPException
-from streamlit import json
 
-from services.api_schemas import ConversationHistoryCreate
 from services.models.models import OrchestratorRequest
 from services.orchestration.openAIOrchestration.orchestration_common import OPENAI_MODEL, event_stream_line, get_openai_client
 from services.orchestration.openAIOrchestration.orchestrator_loop import OrchestrationLoopRunner
 
 #import the tools
-from services.routers.conversationhistory import ConversationHistorySession, create_conversation_history, update_conversation_history
+from services.routers.conversationhistory import ConversationHistorySession
 from services.tools.chroma_tools import CHROMA_TOOLS
 from services.tools.dimension_tools import DIMENSION_TOOLS
+from services.tools.financial_query_tool import query_financial_data
 from services.tools.health_tools import HEALTH_TOOLS
-from services.tools.operations_tools import OPERATIONS_TOOLS
-from services.tools.finance_tools import FINANCE_TOOLS
+from services.tools.operations_tools import KPI_TOOLS
 
 #logging configuration
 logger = logging.getLogger(__name__)
@@ -36,6 +33,7 @@ INSTRUCTIONS = (
         "You are a secure Financial Analyst. "
         "Users will ask questions about financial data, budgets, forecasts, actuals, and related information. "
         "The metric information supporting this data is available in the database, and narrative context is available in semantically indexed document chunks. "
+        "The metric information available to you is for the fiscal year 2026, and the fiscal quarters Q1, Q2, Q3, and Q4. Forecast is available for forecast version - Q4 forecast only. Information on all this is available in the tools you can call. "
         "All this data is available to you via tools that you can call. "
         "The tools provide structured finance records for budgets, forecasts, actuals, account metadata, business unit information, and period definitions, "
         "Use only the supplied tools to answer the user's questions. "
@@ -63,6 +61,7 @@ INSTRUCTIONS_REVIEWER = (
         "You have been provided data from a financial analyst agent, which includes financial data, budgets, forecasts, actuals, and related information. "
         "Your task is to review this data, identify any issues, missing information, errors, or inconsistencies, and provide a summary of your findings. "
         "Use your expertise to analyze the data critically and provide actionable insights. "
+        "You have been provided with the same tools, as the financial analyst agent, to help you review the data and find any issues. "
         "Your summary should be clear, concise, and focused on the key points that need attention. "
     )
 
@@ -100,8 +99,8 @@ class Orchestrator:
                 tools=[
                     *CHROMA_TOOLS,
                     *DIMENSION_TOOLS,
-                    *OPERATIONS_TOOLS,
-                    *FINANCE_TOOLS,
+                    *KPI_TOOLS,
+                    query_financial_data,
                     *HEALTH_TOOLS,
                     self.build_reviewer_agent().as_tool(
                          tool_name="financial_reviewer",
@@ -123,13 +122,13 @@ class Orchestrator:
                 instructions=self.INSTRUCTIONS_REVIEWER,
                 model_settings=ModelSettings(temperature=0.0, max_tokens=512),
                 #output_type=AgentOutputSchema(OpenAIPlanResult, strict_json_schema=False),
-                # tools=[
-                #     *CHROMA_TOOLS,
-                #     *DIMENSION_TOOLS,
-                #     *OPERATIONS_TOOLS,
-                #     *FINANCE_TOOLS,
-                #     *HEALTH_TOOLS,
-                # ]
+                tools=[
+                    *CHROMA_TOOLS,
+                    *DIMENSION_TOOLS,
+                    *KPI_TOOLS,
+                    query_financial_data,
+                    *HEALTH_TOOLS,
+                ]
             )
 
     async def orchestrate_new(self, payload: OrchestratorRequest):
