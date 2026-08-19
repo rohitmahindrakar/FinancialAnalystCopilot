@@ -12,5 +12,13 @@ async def query_finance_chunks(request: ChromaQueryRequestParameters) -> dict[st
         request.model_dump(),
     )
 
+@function_tool(strict_mode=False)
+async def query_finance_chunks_by_id(chunk_id: str) -> dict[str, Any]:
+    """Query finance chunks from the local Chroma DB by chunk ID. The chunks include company information, financial data, quarterly reports, conversations, and other relevant information. Query is performed using the provided chunk ID, and relevant chunks of data are returned."""
+    return await api_post(
+        "/chroma/get-chunk-by-id",
+        {"chunk_id": chunk_id},
+    )
+
 CHROMA_TOOLS = [
     query_finance_chunks]

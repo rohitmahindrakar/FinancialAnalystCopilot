@@ -3,11 +3,18 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 import requests
 import streamlit as st
+
+from models.models import ChartSpec, FinancialCopilotAPIResponse
 
 DEFAULT_API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
 LOGO_PATH = Path(__file__).resolve().parent / "assets" / "company_logo.svg"
@@ -186,35 +193,95 @@ def fetch_welcome_message() -> str:
         return f"Unable to connect to backend welcome API: {exc}"
 
 
-def stream_orchestrator_response(response: requests.Response, status: Any) -> str | None:
+def _coerce_chart_spec(chart: Any) -> ChartSpec | None:
+    if chart is None:
+        return None
+
+    # A legacy or partially initialized ChartSpec can exist in-process when the class was reloaded.
+    # Recover its field data from __dict__ before validating it back into a healthy model.
+    if hasattr(chart, "__dict__") and not hasattr(chart, "__pydantic_fields_set__"):
+        raw = dict(chart.__dict__)
+        if set({"chart_type", "title", "x_label", "y_label", "categories", "series"}).issubset(raw.keys()):
+            try:
+                return ChartSpec.model_validate(raw)
+            except Exception:
+                pass
+
+    # Already a valid model instance: keep it instead of re-instantiating it.
+    if isinstance(chart, ChartSpec):
+        return chart
+
+    # Handle any Pydantic/BaseModel-like object, including partially initialized legacy objects.
+    if hasattr(chart, "model_dump") and callable(chart.model_dump):
+        try:
+            return ChartSpec.model_validate(chart.model_dump(mode="json"))
+        except Exception:
+            pass
+
+    if hasattr(chart, "dict") and callable(chart.dict):
+        try:
+            return ChartSpec.model_validate(chart.dict())
+        except Exception:
+            pass
+
+    if isinstance(chart, dict):
+        try:
+            return ChartSpec.model_validate(chart)
+        except Exception:
+            # Final fallback: only construct from plain data, never from an existing model instance.
+            return ChartSpec(**chart)
+
+    if isinstance(chart, str):
+        data = json.loads(chart)
+        if isinstance(data, dict):
+            try:
+                return ChartSpec.model_validate(data)
+            except Exception:
+                return ChartSpec(**data)
+
+    return None
+
+
+def stream_orchestrator_response(response: requests.Response, status: Any) -> FinancialCopilotAPIResponse | None:
     """Consume the backend SSE stream, updating the status widget, and return the final answer."""
     event_name: str | None = None
     data_lines: list[str] = []
     final_answer: str | None = None
+    final_response: FinancialCopilotAPIResponse
 
     def handle_event(name: str, payload: dict[str, Any]) -> None:
         nonlocal final_answer
-        if name == "status":
-            message = payload.get("message", "")
-            stage = payload.get("stage", "")
-            reasoning = payload.get("reasoning")
+        nonlocal final_response
 
-            if st.session_state.conversation_id is None and payload.get("conversation_id") is not None:
-                st.session_state.conversation_id = payload.get("conversation_id")
+        try:
+            if name == "status":
+                message = payload.get("message", "")
+                stage = payload.get("stage", "")
+                reasoning = payload.get("reasoning")
 
-            if stage == "planning_update" and reasoning:
-                text = f"Planning: {reasoning}"
-            elif stage and message:
-                text = f"{stage.replace('_', ' ').title()}: {message}"
-            else:
-                text = message
-            if text:
-                status.update(label=text)
-                status.write(text)
-        elif name == "final":
-            final_answer = payload.get("final_response", "")
-        elif name == "error":
-            final_answer = payload.get("message", "Unexpected orchestrator error")
+                if st.session_state.conversation_id is None and payload.get("conversation_id") is not None:
+                    st.session_state.conversation_id = payload.get("conversation_id")
+
+                if stage == "planning_update" and reasoning:
+                    text = f"Planning: {reasoning}"
+                elif stage and message:
+                    text = f"{stage.replace('_', ' ').title()}: {message}"
+                else:
+                    text = message
+                if text:
+                    status.update(label=text)
+                    status.write(text)
+            elif name == "final":
+                final_answer = payload.get("final_response", "")
+                #chart = payload.get("chart")
+                #chart_obj = _coerce_chart_spec(chart)
+                final_response = FinancialCopilotAPIResponse(answer=final_answer, chart=None)#chart_obj)
+            elif name == "error":
+                final_answer = payload.get("message", "Unexpected orchestrator error")
+                final_response = FinancialCopilotAPIResponse(answer=final_answer, chart=None)
+        except Exception as exc:
+            final_answer = f"Unexpected error: {exc}"
+            final_response = FinancialCopilotAPIResponse(answer=final_answer, chart=None)
 
     for raw_line in response.iter_lines():
         if raw_line is None:
@@ -234,10 +301,10 @@ def stream_orchestrator_response(response: requests.Response, status: Any) -> st
         json_str = ''.join(data_lines).replace("'", '"')
         handle_event(event_name, json.loads(json_str))
 
-    return final_answer
+    return final_response
 
 
-def ask_orchestrator(user_question: str, status: Any) -> str:
+def ask_orchestrator(user_question: str, status: Any) -> FinancialCopilotAPIResponse | str:
     try:
         # conversation_history = [
         #     {"role": item["role"], "content": item["text"]} for item in st.session_state.history[:-1]
@@ -265,6 +332,44 @@ def ask_orchestrator(user_question: str, status: Any) -> str:
         return f"Unexpected error: {exc}"
 
 
+def render_response(response: FinancialCopilotAPIResponse):
+
+    st.markdown(response.answer)
+
+    if not response.chart:
+        return
+
+    chart = response.chart
+
+    data = {
+        "category": chart.categories
+    }
+
+    for series in chart.series:
+        data[series.name] = series.values
+
+    df = pd.DataFrame(data)
+
+    st.subheader(chart.title)
+
+    if chart.chart_type == "line":
+        st.line_chart(
+            df,
+            x="category",
+        )
+
+    elif chart.chart_type == "bar":
+        st.bar_chart(
+            df,
+            x="category",
+        )
+
+    elif chart.chart_type == "scatter":
+        st.scatter_chart(
+            df,
+            x="category",
+        )
+
 if not st.session_state.welcome_loaded:
     st.session_state.history.append({"role": "assistant", "text": fetch_welcome_message()})
     st.session_state.welcome_loaded = True
@@ -289,6 +394,10 @@ if prompt:
         with st.status("Contacting Financial Analyst Copilot agent...", expanded=True) as status:
             final_answer = ask_orchestrator(prompt, status)
             status.update(label="Response ready", state="complete", expanded=False)
-        st.markdown(final_answer)
+    
+        if isinstance(final_answer, FinancialCopilotAPIResponse):
+            render_response(final_answer)
+        else:
+            st.markdown(final_answer)
 
     st.session_state.history.append({"role": "assistant", "text": final_answer})
