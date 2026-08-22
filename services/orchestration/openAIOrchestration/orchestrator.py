@@ -8,6 +8,7 @@ from fastapi import HTTPException
 
 from models.models import ChartSeries, ChartSpec, FinanceRequestValidation, ReviewRequest, ReviewResult
 from services.models.models import OrchestratorRequest
+from services.orchestration.agents.agents import Agents
 from services.orchestration.openAIOrchestration.orchestration_common import OPENAI_MODEL, event_stream_line, get_openai_client
 from services.orchestration.openAIOrchestration.orchestrator_loop import OrchestrationLoopRunner
 
@@ -315,146 +316,6 @@ class Orchestrator:
         self.INSTRUCTIONS_INPUT_GUARDRAIL = INSTRUCTIONS_INPUT_GUARDRAIL
         pass
 
-    def _execute_openai_orchestration_loop(
-        user_question: str,
-        planner: Any,
-        executor: Any,
-        max_rounds: int = 4,
-    ) -> dict[str, Any]:
-        """Retained as a module-level function for backward compatibility with existing callers/tests."""
-        return _orchestration_loop_runner.run(user_question, planner, executor, max_rounds=max_rounds)
-
-    def build_orchestrator_agent(self) -> Agent:
-            client = get_openai_client()
-            model = OpenAIResponsesModel(
-                        model=OPENAI_MODEL,
-                        openai_client=client,
-                    )
-
-            @input_guardrail
-            async def validate_finance_request(
-                ctx: RunContextWrapper[None],
-                agent: Agent,
-                input: str | list[TResponseInputItem],
-            ) -> GuardrailFunctionOutput:
-
-                latest_user_input = self.get_latest_user_input(input)
-
-                result = await Runner.run(
-                    self.build_input_guardrail_agent(),
-                    latest_user_input,
-                    context=ctx.context,
-                )
-        
-                validation = result.final_output
-        
-                return GuardrailFunctionOutput(
-                    output_info=validation,
-                    tripwire_triggered=not validation.is_valid_request,
-                )
-            
-            return Agent(
-                name="finance-analyst-agent",
-                model=model,
-                instructions=self.INSTRUCTIONS,
-                model_settings=ModelSettings(temperature=0.0, max_tokens=None),
-                input_guardrails=[validate_finance_request],
-                #output_type=AgentOutputSchema(OpenAIPlanResult, strict_json_schema=False),
-                tools=[
-                    *CHROMA_TOOLS,
-                    *DIMENSION_TOOLS,
-                    *KPI_TOOLS,
-                    query_financial_data,
-                    *HEALTH_TOOLS,
-                    self.build_reviewer_agent().as_tool(
-                        tool_name="financial_reviewer",
-                        tool_description="""
-                            Review a proposed financial analysis before returning it to the user.
-
-                            Pass the original user question, draft answer, and claims,
-                            supporting evidence, and calculations.
-
-                            Pass only the chunk IDs actually used in the evidence, not the full text or all the chunkIds you received, to avoid overwhelming the reviewer.
-                            Pass only the relevant claims, not all claims.
-                            Also, only pass the relevant calculations, not all calculations.
-
-                            Use this tool after completing substantial financial analysis
-                            and before returning the final response.
-
-                            The reviewer validates factual support, calculations,
-                            evidence consistency, logic, and completeness.
-                            """,
-                        parameters=ReviewRequest,
-                        # DEBUGGING:
-                        failure_error_function=None,
-                    ),  # Add the reviewer agent as a tool
-                ]
-            )
-
-    def build_reviewer_agent(self) -> Agent:
-            client = get_openai_client()
-            model = OpenAIResponsesModel(
-                        model=OPENAI_MODEL,
-                        openai_client=client,
-                    )
-            return Agent(
-                name="review_financial_analysis",
-                model=model,
-                instructions=self.INSTRUCTIONS_REVIEWER,
-                model_settings=ModelSettings(temperature=0.0, max_tokens=None),
-                output_type=ReviewResult,
-                tools=[
-                    query_finance_chunks_by_id,
-                ]
-            )
-
-    def build_input_guardrail_agent(self) -> Agent:
-            client = get_openai_client()
-            model = OpenAIResponsesModel(
-                        model=OPENAI_MODEL,
-                        openai_client=client,
-                    )
-            return Agent(
-                name="input_guardrail",
-                model=model,
-                instructions=self.INSTRUCTIONS_INPUT_GUARDRAIL,
-                model_settings=ModelSettings(temperature=0.0, max_tokens=512),
-                output_type=FinanceRequestValidation
-            )
-
-    def get_latest_user_input(
-        self,
-        input: str | list[TResponseInputItem],
-    ) -> str:
-
-        # Single-turn input
-        if isinstance(input, str):
-            return input
-
-        # Multi-turn input: walk backwards and find the newest user message
-        for item in reversed(input):
-
-            if isinstance(item, dict):
-                if item.get("role") == "user":
-                    content = item.get("content", "")
-
-                    if isinstance(content, str):
-                        return content
-
-                    # Handle structured content
-                    if isinstance(content, list):
-                        texts = []
-
-                        for part in content:
-                            if isinstance(part, dict):
-                                text = part.get("text")
-                                if text:
-                                    texts.append(text)
-
-                        return "\n".join(texts)
-
-        # Safe fallback
-        return ""
 
     async def orchestrate_new(self, payload: OrchestratorRequest):
         user_question = payload.user_question.strip()
@@ -477,7 +338,11 @@ class Orchestrator:
             ).encode("utf-8")
         
         try:
-            agent = self.build_orchestrator_agent()
+            #create an instance of the class agent, and create an agent using the build_orchestrator_agent method, and then run the agent with the user_question, and yield the final output as an event stream line
+            agent_instance = Agents()
+            agent = agent_instance.build_orchestrator_agent()
+            
+            # agent = self.build_orchestrator_agent()
 
             session = ConversationHistorySession(conversation_id=payload.conversation_id)
 

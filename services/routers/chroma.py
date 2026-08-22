@@ -215,7 +215,7 @@ def query_finance_chunks_and_return_reranked_results(payload: ChromaQueryRequest
 
     return reranked_result
 
-@router.get("/get-chunk-by-id")
+@router.get("/get-chunk-by-id/{chunk_id}")
 #write a method that takes a chunk id, and returns the chunk content and metadata from the specified chroma collection.
 def get_chunk(chunk_id: str, collection_name: str = "finance_docs_chunks") -> Result:
     client = PersistentClient(path=str(DEFAULT_CHROMA_DB_PATH), settings=Settings(anonymized_telemetry=False))

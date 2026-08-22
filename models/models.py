@@ -1,4 +1,4 @@
-from typing import Any, Literal, Optional
+from typing import Any, Literal, Optional, TypedDict
 
 from pydantic import BaseModel, Field
 
@@ -95,6 +95,89 @@ class FinancialCopilotAPIResponse(BaseModel):
 # Structured evidence passed from Analyst -> Reviewer
 # ============================================================
 
+class DocumentEvidence(BaseModel):
+    evidence_id: str
+
+    chunk_id: str
+
+    document_name: str
+
+    document_link: str | None = None
+
+    page_number: int | None = None
+
+    # Why this chunk was used by the analyst
+    relevance: str
+
+class DatabaseCell(BaseModel):
+    column_name: str
+
+    # Keep serialized representation predictable.
+    value: str
+
+    data_type: str | None = None
+
+
+class DatabaseRow(BaseModel):
+    cells: list[DatabaseCell] = Field(
+        default_factory=list
+    )
+
+class DatabaseEvidence(BaseModel):
+    evidence_id: str = Field(
+        description="Unique identifier for this database evidence item."
+    )
+
+    query_name: str = Field(
+        description="Short human-readable name describing what the query retrieved."
+    )
+
+    # query: str = Field(
+    #     description="The database query executed to obtain this evidence."
+    # )
+
+    purpose: str = Field(
+        description=(
+            "Why this query was executed and how its results support the analysis."
+        )
+    )
+
+    source_name: str = Field(
+        description="Name of the database or logical financial data source."
+    )
+
+    rows: list[DatabaseRow] = Field(
+        default_factory=list,
+        description=(
+            "Only the result rows materially used to support the analysis."
+        ),
+    )
+
+    row_count: int = Field(
+        description="Number of rows returned or represented by this evidence."
+    )
+
+class CalculationInput(BaseModel):
+    name: str
+    value: str
+    unit: str | None = None
+
+
+class CalculationEvidence(BaseModel):
+    evidence_id: str
+
+    calculation_name: str
+
+    formula: str
+
+    inputs: list[CalculationInput] = Field(
+        default_factory=list
+    )
+
+    result: str
+
+    unit: str | None = None
+
 class Evidence(BaseModel):
     source_id: str
     chunk_id: str | None = None
@@ -121,27 +204,71 @@ class Calculation(BaseModel):
 
 
 class AnalystClaim(BaseModel):
-    claim: str
+    claim_id: str = Field(
+        description="Unique identifier for this material claim."
+    )
 
-    # References IDs from the evidence list
-    evidence_ids: list[str] = Field(default_factory=list)
+    claim: str = Field(
+        description=(
+            "A material factual or analytical conclusion made in the draft answer."
+        )
+    )
 
+    evidence_ids: list[str] = Field(
+        default_factory=list,
+        description=(
+            "IDs of document, database, or calculation evidence "
+            "that directly support this claim."
+        ),
+    )
+
+class AnalystResult(BaseModel):
+
+    draft_answer: str
+
+    claims: list[AnalystClaim] = Field(
+        default_factory=list
+    )
+
+    document_evidence: list[DocumentEvidence] = Field(
+        default_factory=list
+    )
+
+    database_evidence: list[DatabaseEvidence] = Field(
+        default_factory=list
+    )
+
+    calculation_evidence: list[CalculationEvidence] = Field(
+        default_factory=list
+    )
 
 class ReviewRequest(BaseModel):
+
     user_question: str
 
     draft_answer: str
 
-    claims: list[AnalystClaim] = Field(default_factory=list)
+    claims: list[AnalystClaim] = Field(
+        default_factory=list
+    )
 
-    evidence: list[Evidence] = Field(default_factory=list)
-    #evidenceIds: list[str] = Field(default_factory=list)
+    document_evidence: list[DocumentEvidence] = Field(
+        default_factory=list
+    )
 
-    calculations: list[Calculation] = Field(default_factory=list)
+    database_evidence: list[DatabaseEvidence] = Field(
+        default_factory=list
+    )
+
+    calculation_evidence: list[CalculationEvidence] = Field(
+        default_factory=list
+    )
 
 
 #reviewer response
 class ReviewIssue(BaseModel):
+
+    issue_id: str
 
     severity: Literal[
         "low",
@@ -156,34 +283,111 @@ class ReviewIssue(BaseModel):
         "missing_information",
         "logical_consistency",
         "source_mismatch",
+        "database_query",
     ]
 
     description: str
+
+    affected_claim_ids: list[str] = Field(
+        default_factory=list
+    )
+
+    evidence_ids: list[str] = Field(
+        default_factory=list
+    )
 
     suggested_correction: str | None = None
 
 
 class ReviewResult(BaseModel):
 
-    approved: bool
-
-    confidence: float = Field(
-        ge=0.0,
-        le=1.0,
+    approved: bool = Field(
+        description=(
+            "True only when the draft answer is materially accurate, "
+            "supported by the supplied evidence, and sufficiently complete."
+        )
     )
 
-    issues: list[ReviewIssue] = Field(
+    requires_additional_data: bool = Field(
+        default=False,
+        description=(
+            "True when the identified issue cannot be resolved using the "
+            "currently supplied evidence and targeted additional retrieval is required."
+        ),
+    )
+
+    requires_recalculation: bool = Field(
+        default=False,
+        description=(
+            "True when one or more calculations must be recomputed."
+        ),
+    )
+
+    requires_revision: bool = Field(
+        default=False,
+        description=(
+            "True when the analyst's draft answer should be modified before finalization."
+        ),
+    )
+
+    requires_re_review: bool = Field(
+        default=False,
+        description=(
+            "True when the revised analysis should be submitted to the reviewer again."
+        ),
+    )
+
+class CitationInfo(BaseModel):
+
+    citation_id: str
+
+    citation_type: Literal[
+        "document",
+        "database",
+        "calculation",
+    ]
+
+    label: str
+
+    document_name: str | None = None
+
+    document_link: str | None = None
+
+    page_number: int | None = None
+
+    chunk_id: str | None = None
+
+    database_source: str | None = None
+
+    query_name: str | None = None
+
+    query_summary: str | None = None
+
+    calculation_name: str | None = None
+
+class FinalFinancialResponse(BaseModel):
+
+    answer: str
+
+    citations: list[CitationInfo] = Field(
         default_factory=list
     )
-
-    requires_additional_data: bool = False
-    requires_recalculation: bool = False
-    requires_revision: bool = False
-    requires_re_review: bool = False
-
-    summary: str
 
 class FinanceRequestValidation(BaseModel):
     is_valid_request: bool
     category: str
     reason: str
+
+class FinancialAnalysisState(TypedDict, total=False):
+
+    user_question: str
+
+    analysis_result: AnalystResult
+
+    review_result: ReviewResult
+
+    review_cycle: int
+
+    final_answer: FinalFinancialResponse
+
+    last_action: str

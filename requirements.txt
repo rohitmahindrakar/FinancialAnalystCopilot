@@ -11,3 +11,4 @@ sentence-transformers>=3.0.0
 plotly>=5.0.0
 matplotlib>=3.8.0
 chromadb
+langgraph==1.2.10

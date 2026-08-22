@@ -17,6 +17,7 @@ from agents import OpenAIChatCompletionsModel
 from services.models.models import OrchestratorRequest
 from services.orchestration.openAIOrchestration.orchestration_common import event_stream_line
 from services.orchestration.openAIOrchestration.orchestrator import Orchestrator
+from services.orchestration.LangraphOrchestration.orchestrator import Orchestrator as LangraphOrchestrator
 from services.rag.injest import Injestor
 from services.routers.tool_registry import OrchestratorToolRegistry
 
@@ -24,6 +25,7 @@ load_dotenv()
 
 router = APIRouter(prefix="/orchestrator", tags=["orchestrator"])
 _openAI_Orchestrator: Orchestrator = Orchestrator()
+_langraph_Orchestrator: LangraphOrchestrator = LangraphOrchestrator()
 
 ORCHESTRATOR_TOOL_REGISTRY = OrchestratorToolRegistry()
 
@@ -352,7 +354,8 @@ def orchestrator_welcome() -> JSONResponse:
 
 @router.post("/ask-openai")
 async def orchestrate_with_openai_agents(payload: OrchestratorRequest):
-    return StreamingResponse(_openAI_Orchestrator.orchestrate_new(payload), media_type="text/event-stream")
+    return StreamingResponse(_langraph_Orchestrator.orchestrate(payload), media_type="text/event-stream")
+    #return StreamingResponse(_openAI_Orchestrator.orchestrate_new(payload), media_type="text/event-stream")
 
 @router.get("/chunk-documents/{internal}")
 async def chunk_documents(internal: bool): 
