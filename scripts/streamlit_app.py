@@ -20,7 +20,7 @@ from models.models import ChartSpec, CitationInfo, FinalFinancialResponse
 DEFAULT_API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
 LOGO_PATH = Path(__file__).resolve().parent / "assets" / "company_logo.svg"
 USER_AVATAR = "🧑\u200d💼"
-ASSISTANT_AVATAR = "💠"
+ASSISTANT_AVATAR = "📈"
 SAMPLE_QUESTIONS = [
     "Summarize the latest budget context for Q3.",
     "What are the key forecast trends across the business units?",
@@ -28,82 +28,195 @@ SAMPLE_QUESTIONS = [
     "Explain the main document context around the company's guidance.",
 ]
 
-st.set_page_config(page_title="Financial Analyst Copilot", page_icon="💠", layout="wide")
+st.set_page_config(page_title="FinPulseAI", page_icon="📊", layout="wide")
 
 st.markdown(
     """
     <style>
-    .main {
-        background: linear-gradient(180deg, #f4f8fb 0%, #eef4fa 100%);
+    @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+    :root {
+        --fp-navy: #0d1b2a;
+        --fp-cyan: #44d1c2;
+        --fp-ink: #10273e;
+        --fp-slate: #4f6782;
+        --fp-pearl: #f5f9ff;
+        --fp-line: #d8e4f5;
     }
+
+    .stApp {
+        font-family: 'IBM Plex Sans', sans-serif;
+        background:
+            radial-gradient(1200px 500px at -10% -10%, rgba(68, 209, 194, 0.28) 0%, rgba(68, 209, 194, 0) 60%),
+            radial-gradient(1000px 500px at 115% 0%, rgba(57, 121, 194, 0.18) 0%, rgba(57, 121, 194, 0) 62%),
+            linear-gradient(180deg, #f5f9ff 0%, #eef4fd 100%);
+    }
+
+    h1, h2, h3, h4 {
+        font-family: 'Sora', sans-serif;
+        letter-spacing: -0.02em;
+        color: var(--fp-ink);
+    }
+
     .block-container {
-        padding-top: 1.25rem;
+        padding-top: 1rem;
         padding-bottom: 6rem;
-        max-width: 900px;
+        max-width: 980px;
     }
+
     .brand-header {
         display: flex;
         align-items: center;
         gap: 1rem;
-        margin-bottom: 1.5rem;
-        padding: 0.9rem 1.25rem;
-        background: rgba(255, 255, 255, 0.85);
-        border: 1px solid rgba(13, 46, 92, 0.12);
-        border-radius: 16px;
-        box-shadow: 0 10px 28px rgba(13, 46, 92, 0.08);
+        margin-bottom: 1.2rem;
+        padding: 1rem 1.2rem;
+        background: rgba(255, 255, 255, 0.82);
+        border: 1px solid rgba(9, 33, 61, 0.11);
+        border-radius: 20px;
+        box-shadow: 0 18px 34px rgba(9, 33, 61, 0.12);
+        backdrop-filter: blur(7px);
+        animation: rise-in 520ms ease-out;
     }
+
     .brand-header img {
-        width: 64px;
-        height: 64px;
-        border-radius: 16px;
+        width: 68px;
+        height: 68px;
+        border-radius: 18px;
+        box-shadow: 0 12px 24px rgba(19, 76, 133, 0.22);
     }
+
     .brand-title {
-        font-size: 1.6rem;
-        font-weight: 700;
-        color: #0d2e5c;
+        font-family: 'Sora', sans-serif;
+        font-size: 1.7rem;
+        font-weight: 800;
+        color: #0f2845;
     }
+
     .brand-subtitle {
         font-size: 0.9rem;
-        color: #456587;
+        color: var(--fp-slate);
+        max-width: 38rem;
     }
+
     .status-pill {
         display: inline-block;
-        padding: 0.15rem 0.7rem;
+        padding: 0.26rem 0.78rem;
         border-radius: 999px;
-        background: #e5f3ec;
-        color: #1c7a4e;
-        font-size: 0.78rem;
+        background: #e7fff8;
+        color: #0b6f4b;
+        border: 1px solid rgba(11, 111, 75, 0.2);
+        font-size: 0.75rem;
         font-weight: 600;
         margin-left: auto;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+        animation: pulse-dot 1.6s ease-in-out infinite;
     }
+
+    .signal-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.65rem;
+        margin-bottom: 1.2rem;
+    }
+
+    .signal-card {
+        background: rgba(255, 255, 255, 0.84);
+        border: 1px solid var(--fp-line);
+        border-radius: 14px;
+        padding: 0.65rem 0.8rem;
+        box-shadow: 0 10px 22px rgba(10, 42, 77, 0.08);
+        animation: rise-in 600ms ease-out;
+    }
+
+    .signal-card b {
+        display: block;
+        color: var(--fp-ink);
+        font-size: 0.88rem;
+        margin-bottom: 0.08rem;
+    }
+
+    .signal-card span {
+        color: var(--fp-slate);
+        font-size: 0.76rem;
+    }
+
     section[data-testid="stSidebar"] {
-        background: #0d2e5c;
+        background: linear-gradient(180deg, #0c213a 0%, #123a5f 58%, #1a4f74 100%);
+        border-right: 1px solid rgba(255, 255, 255, 0.14);
     }
+
     section[data-testid="stSidebar"] * {
-        color: #eaf1fb !important;
+        color: #edf4ff !important;
     }
+
     section[data-testid="stSidebar"] div[data-testid="stTextInput"] input {
-        color: #0d2e5c !important;
+        color: #0f2845 !important;
         background: #ffffff;
-        border-radius: 8px;
+        border-radius: 11px;
+        border: 1px solid #b9d0ec;
     }
+
     section[data-testid="stSidebar"] .stButton button {
-        background: rgba(255, 255, 255, 0.08);
-        border: 1px solid rgba(255, 255, 255, 0.25);
-        color: #eaf1fb;
-        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.12);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        color: #f3f8ff;
+        border-radius: 12px;
         text-align: left;
+        transition: all 220ms ease;
     }
+
     section[data-testid="stSidebar"] .stButton button:hover {
-        border-color: #7fb2e8;
-        background: rgba(255, 255, 255, 0.16);
+        border-color: #9fd8ff;
+        background: rgba(255, 255, 255, 0.22);
+        transform: translateY(-1px);
     }
+
     div[data-testid="stChatMessage"] {
-        background: rgba(255, 255, 255, 0.9);
-        border: 1px solid #dbe7f3;
-        border-radius: 16px;
-        box-shadow: 0 6px 16px rgba(13, 46, 92, 0.05);
+        background: rgba(255, 255, 255, 0.93);
+        border: 1px solid #d9e4f2;
+        border-radius: 18px;
+        box-shadow: 0 12px 28px rgba(9, 33, 61, 0.08);
         margin-bottom: 0.6rem;
+    }
+
+    div[data-testid="stChatInput"] textarea {
+        border-radius: 14px !important;
+        border: 1px solid #bdd3ed !important;
+        box-shadow: 0 6px 16px rgba(10, 42, 77, 0.09);
+    }
+
+    @media (max-width: 900px) {
+        .signal-row {
+            grid-template-columns: 1fr;
+        }
+        .brand-title {
+            font-size: 1.35rem;
+        }
+        .brand-subtitle {
+            font-size: 0.84rem;
+        }
+    }
+
+    @keyframes rise-in {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes pulse-dot {
+        0%, 100% {
+            transform: scale(1);
+            opacity: 0.95;
+        }
+        50% {
+            transform: scale(1.03);
+            opacity: 1;
+        }
     }
     </style>
     """,
@@ -120,8 +233,8 @@ if "pending_question" not in st.session_state:
 with st.sidebar:
     if LOGO_PATH.exists():
         st.image(str(LOGO_PATH), width=64)
-    st.markdown("### Financial Analyst Copilot")
-    st.caption("Grounded finance Q&A powered by a backend orchestrator agent.")
+    st.markdown("### FinPulseAI")
+    st.caption("Real-time financial pulse checks powered by a grounded orchestration engine.")
     st.divider()
 
     api_base_url = st.text_input("API base URL", value=DEFAULT_API_BASE_URL)
@@ -169,13 +282,24 @@ with col_logo:
         st.image(str(LOGO_PATH), width=64)
 with col_brand:
     st.markdown(
-        "<div class='brand-title'>Financial Analyst Copilot</div>"
-        "<div class='brand-subtitle'>Ask business finance questions and get grounded, source-backed answers.</div>",
+        "<div class='brand-title'>FinPulseAI</div>"
+        "<div class='brand-subtitle'>Track the health and movement of company financial performance with grounded, source-backed intelligence.</div>",
         unsafe_allow_html=True,
     )
 with col_status:
     st.markdown("<span class='status-pill'>● Connected</span>", unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True)
+
+st.markdown(
+    """
+    <div class="signal-row">
+        <div class="signal-card"><b>Performance Pulse</b><span>Monitor shifts in budget, forecast, and actuals.</span></div>
+        <div class="signal-card"><b>Risk Drift</b><span>Spot early variance patterns before they widen.</span></div>
+        <div class="signal-card"><b>Narrative Context</b><span>Link every answer to grounded document evidence.</span></div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 def fetch_welcome_message() -> str:
@@ -186,7 +310,7 @@ def fetch_welcome_message() -> str:
         welcome_text = welcome_data.get("welcome_message", "")
         overview_text = welcome_data.get("data_overview", "")
         combined_text = "\n\n".join(filter(None, [welcome_text, overview_text]))
-        return combined_text or "Welcome to Financial Analyst Copilot. Ask a question to get started."
+        return combined_text or "Welcome to FinPulseAI. Ask a question to get started."
     except requests.HTTPError as exc:
         error_details = exc.response.text if exc.response is not None else str(exc)
         return f"Unable to load welcome message from backend: {error_details}"
@@ -480,7 +604,7 @@ if prompt:
         st.markdown(prompt)
 
     with st.chat_message("assistant", avatar=ASSISTANT_AVATAR):
-        with st.status("Contacting Financial Analyst Copilot agent...", expanded=True) as status:
+        with st.status("Contacting FinPulseAI agent...", expanded=True) as status:
             final_answer = ask_orchestrator(prompt, status)
             status.update(label="Response ready", state="complete", expanded=False)
     
