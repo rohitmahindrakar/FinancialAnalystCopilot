@@ -1,18 +1,32 @@
-<svg width="220" height="220" viewBox="0 0 220 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg width="240" height="240" viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bg" x1="20" y1="20" x2="200" y2="200" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#0F5DA8"/>
-      <stop offset="1" stop-color="#0B1E3A"/>
+    <linearGradient id="bg" x1="24" y1="18" x2="212" y2="222" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0A1B2F"/>
+      <stop offset="0.55" stop-color="#113C65"/>
+      <stop offset="1" stop-color="#16847C"/>
     </linearGradient>
-    <linearGradient id="accent" x1="55" y1="50" x2="170" y2="170" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#7FD1FF"/>
-      <stop offset="1" stop-color="#C9F7FF"/>
+    <linearGradient id="pulse" x1="55" y1="114" x2="185" y2="114" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A3ECFF"/>
+      <stop offset="1" stop-color="#D3FFEE"/>
+    </linearGradient>
+    <linearGradient id="bars" x1="150" y1="70" x2="196" y2="184" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#48E0D1"/>
+      <stop offset="1" stop-color="#9EF8EB"/>
     </linearGradient>
   </defs>
-  <rect x="10" y="10" width="200" height="200" rx="42" fill="url(#bg)"/>
-  <path d="M55 145V85C55 76.1634 62.1634 69 71 69H93C101.837 69 109 76.1634 109 85V145" stroke="url(#accent)" stroke-width="12" stroke-linecap="round"/>
-  <path d="M111 145V55C111 46.1634 118.163 39 127 39H149C157.837 39 165 46.1634 165 55V145" stroke="url(#accent)" stroke-width="12" stroke-linecap="round"/>
-  <path d="M55 145H165" stroke="#D9F8FF" stroke-width="12" stroke-linecap="round"/>
-  <path d="M78 96H102" stroke="#0F5DA8" stroke-width="8" stroke-linecap="round"/>
-  <path d="M133 65H154" stroke="#0F5DA8" stroke-width="8" stroke-linecap="round"/>
+
+  <rect x="14" y="14" width="212" height="212" rx="52" fill="url(#bg)"/>
+  <rect x="14" y="14" width="212" height="212" rx="52" stroke="rgba(216,239,255,0.32)" stroke-width="2"/>
+
+  <circle cx="120" cy="120" r="72" stroke="rgba(182,226,255,0.22)" stroke-width="2"/>
+  <circle cx="120" cy="120" r="56" stroke="rgba(182,226,255,0.16)" stroke-width="2"/>
+
+  <path d="M56 128H92L106 103L121 142L135 116H184" stroke="url(#pulse)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="148" y="142" width="12" height="28" rx="6" fill="url(#bars)"/>
+  <rect x="166" y="124" width="12" height="46" rx="6" fill="url(#bars)"/>
+  <rect x="184" y="100" width="12" height="70" rx="6" fill="url(#bars)"/>
+
+  <circle cx="56" cy="128" r="5" fill="#B6EDFF"/>
+  <circle cx="184" cy="116" r="5" fill="#D8FFF2"/>
 </svg>

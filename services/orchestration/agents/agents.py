@@ -6,6 +6,7 @@ from models.models import AnalystResult, FinanceRequestValidation, ReviewRequest
 from services.orchestration.openAIOrchestration.orchestration_common import OPENAI_MODEL, get_openai_client
 from services.tools.chroma_tools import CHROMA_TOOLS, query_finance_chunks_by_id
 from services.tools.dimension_tools import DIMENSION_TOOLS
+from services.tools.employee_tools import EMPLOYEE_TOOLS
 from services.tools.financial_query_tool import query_financial_data
 from services.tools.health_tools import HEALTH_TOOLS
 from services.tools.operations_tools import KPI_TOOLS
@@ -257,6 +258,8 @@ class Agents:
         - operating expenses
         - gross margin
         - operating margin
+        - employee info
+        - salary
         - EBITDA
         - profit and loss
         - budget
@@ -271,6 +274,8 @@ class Agents:
         - financial KPIs
         - financial summaries
         - explanations of changes in financial performance
+        - quarterly summary
+        - summary for a specific quarter
 
         Examples of VALID requests:
         - "What was revenue last quarter?"
@@ -300,6 +305,11 @@ class Agents:
 
         IMPORTANT:
         Do not reject a request merely because it is ambiguous.
+        Allow requests that are continuation on a conversation, even if they are ambiguous on their own. Examples questions that could be continued conversations include,
+        - "sure"
+        - "go ahead"
+        - yes/no responses
+        - clarifying questions
 
         For example:
         - "How did we do last quarter?"
@@ -360,6 +370,7 @@ class Agents:
                 *KPI_TOOLS,
                 query_financial_data,
                 *HEALTH_TOOLS,
+                *EMPLOYEE_TOOLS,
             ]
         )
 
@@ -402,6 +413,7 @@ class Agents:
             tools=[
                 *CHROMA_TOOLS,
                 *DIMENSION_TOOLS,
+                *EMPLOYEE_TOOLS,
                 *KPI_TOOLS,
                 query_financial_data,
                 *HEALTH_TOOLS,
@@ -471,11 +483,14 @@ class Agents:
                 return input
     
             # Multi-turn input: walk backwards and find the newest user message
+            #if the input contains "try again", skip it and continue looking for the latest user input
             for item in reversed(input):
     
                 if isinstance(item, dict):
                     if item.get("role") == "user":
                         content = item.get("content", "")
+                        if isinstance(content, str) and "try again" in content.lower():
+                            continue
     
                         if isinstance(content, str):
                             return content

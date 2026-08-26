@@ -220,13 +220,13 @@ def query_finance_chunks_and_return_reranked_results(payload: ChromaQueryRequest
 def get_chunk(chunk_id: str, collection_name: str = "finance_docs_chunks") -> Result:
     client = PersistentClient(path=str(DEFAULT_CHROMA_DB_PATH), settings=Settings(anonymized_telemetry=False))
     collection = client.get_collection(name=collection_name)
-    raw_results = collection.query(
+    raw_results = collection.get(
         ids=[chunk_id],
-        include=["documents", "metadatas", "distances"],
+        include=["documents", "metadatas"],
     )
     if not raw_results["documents"][0]:
         raise ValueError(f"Chunk with id '{chunk_id}' not found in collection '{collection_name}'.")
-    return Result(page_content=raw_results["documents"][0][0], metadata=raw_results["metadatas"][0][0])
+    return Result(chunk_id=chunk_id, page_content=raw_results["documents"][0], metadata=raw_results["metadatas"][0])
 
 def query_chroma_collection_new(
     arguments: ChromaQueryRequestParameters
@@ -270,8 +270,8 @@ def query_chroma_collection_new(
             )
 
         chunks: list[Result] = []
-        for result in zip(raw_results["documents"][0], raw_results["metadatas"][0]):
-            chunks.append(Result(page_content=result[0], metadata=result[1]))
+        for result in zip(raw_results["ids"][0], raw_results["documents"][0], raw_results["metadatas"][0]):
+            chunks.append(Result(chunk_id=result[0], page_content=result[1], metadata=result[2]))
         return chunks
     except Exception as exc:  # pragma: no cover - defensive path
         print(f"External model request failed: {exc}")

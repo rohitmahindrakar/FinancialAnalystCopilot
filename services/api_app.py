@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from services.routers import (
+    app_user_router,
     chroma_router,
     dimensions_router,
     documents_router,
@@ -12,6 +13,8 @@ from services.routers import (
     intent_router,
     operations_router,
     orchestrator_router,
+    conversation_history_router,
+    employee_info_router,
 )
 
 app = FastAPI(title="Financial Analyst Copilot API", version="0.1.0")
@@ -25,3 +28,6 @@ app.include_router(operations_router)
 app.include_router(intent_router)
 app.include_router(chroma_router)
 app.include_router(orchestrator_router)
+app.include_router(app_user_router)
+app.include_router(conversation_history_router)
+app.include_router(employee_info_router)

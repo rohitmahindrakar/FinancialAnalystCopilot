@@ -398,6 +398,14 @@ class ConversationHistoryDAO(BaseDAO):
             ],
         )
 
+    async def get_conversation_history_by_user_id(self, user_id: str) -> list[Dict[str, Any]]:
+        sql = f"SELECT cs.* FROM {self.table_name} ch " \
+              f"JOIN conversation_session cs ON ch.conversation_id = cs.conversation_id " \
+              f"WHERE cs.user_id = ? ORDER BY ch.sequence_no"
+        async with self.db.session() as connection:
+            rows = connection.execute(sql, (user_id,)).fetchall()
+            return [_row_to_dict(row) for row in rows]
+
     async def get_by_conversation_id(self, conversation_id: str) -> list[Dict[str, Any]]:
         sql = f"SELECT * FROM {self.table_name} WHERE conversation_id = ? ORDER BY sequence_no"
         async with self.db.session() as connection:
@@ -431,3 +439,118 @@ class ConversationHistoryDAO(BaseDAO):
             if row and row["max_sequence_no"] is not None:
                 return int(row["max_sequence_no"]) + 1
             return 1
+
+class ConversationSessionDAO(BaseDAO):
+    def __init__(self, db: DatabaseConnection) -> None:
+        super().__init__(
+            db,
+            table_name="conversation_session",
+            primary_key="conversation_id",
+            columns=[
+                "conversation_id",
+                "user_id",
+                "title",
+                "status",
+                "created_at",
+                "updated_at",
+                "last_activity_at",
+            ],
+        )
+
+class AppRoleDAO(BaseDAO):
+    def __init__(self, db: DatabaseConnection) -> None:
+        super().__init__(
+            db,
+            table_name="app_role",
+            primary_key="role_id",
+            columns=[
+                "role_id",
+                "role_code",
+                "role_name",
+                "description",
+                "active_flag",
+                "created_at",
+            ],
+        )
+
+class AppUserDAO(BaseDAO):
+    def __init__(self, db: DatabaseConnection) -> None:
+        super().__init__(
+            db,
+            table_name="app_user",
+            primary_key="user_id",
+            columns=[
+                "user_id",
+                "external_user_id",
+                "username",
+                "email",
+                "display_name",
+                "role_id",
+                "business_unit_id",
+                "active_flag",
+                "created_at",
+                "updated_at",
+                "last_login_at",
+            ],
+        )
+
+    async def list_with_role_name(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+        sql = (
+            "SELECT u.*, r.role_name "
+            "FROM app_user u "
+            "LEFT JOIN app_role r ON u.role_id = r.role_id "
+            "ORDER BY u.user_id "
+            "LIMIT ? OFFSET ?"
+        )
+        async with self.db.session() as connection:
+            rows = connection.execute(sql, (limit, offset)).fetchall()
+            return [dict(row) for row in rows]
+
+class EmployeeDAO(BaseDAO):
+    def __init__(self, db: DatabaseConnection) -> None:
+        super().__init__(
+            db,
+            table_name="dim_employee",
+            primary_key="employee_id",
+            columns=[
+                "employee_id",
+                "employee_name",
+                "job_title",
+                "employee_level",
+                "business_unit_id",
+                "manager_employee_id",
+                "phone_number",
+                "employment_type",
+                "hire_date",
+                "active_flag",
+                "confidentiality_level",
+            ],
+        )
+
+class EmployeeCompensationDAO(BaseDAO):
+    def __init__(self, db: DatabaseConnection) -> None:
+        super().__init__(
+            db,
+            table_name="fact_employee_compensation",
+            primary_key="compensation_id",
+            columns=[
+                "compensation_id",
+                "employee_id",
+                "period_id",
+                "base_salary",
+                "bonus_amount",
+                "commission_amount",
+                "stock_compensation",
+                "benefits_cost",
+                "total_compensation",
+                "currency_code",
+                "compensation_status",
+                "confidentiality_level",
+            ],
+        )
+
+    async def get_by_employee_id(self, employee_id: int) -> list[Dict[str, Any]]:
+            sql = f"SELECT * FROM {self.table_name} WHERE employee_id = ? ORDER BY period_id"
+            async with self.db.session() as connection:
+                rows = connection.execute(sql, (employee_id,)).fetchall()
+                return [_row_to_dict(row) for row in rows]

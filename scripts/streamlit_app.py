@@ -234,6 +234,8 @@ if "selected_user_id" not in st.session_state:
     st.session_state.selected_user_id = None
 if "selected_user_label" not in st.session_state:
     st.session_state.selected_user_label = None
+if "selected_user_role_code" not in st.session_state:
+    st.session_state.selected_user_role_code = None
 if "user_selection_confirmed" not in st.session_state:
     st.session_state.user_selection_confirmed = False
 if "conversation_id" not in st.session_state:
@@ -260,6 +262,7 @@ with st.sidebar:
             st.session_state.pending_question = None
             st.session_state.selected_user_id = None
             st.session_state.selected_user_label = None
+            st.session_state.selected_user_role_code = None
             st.session_state.user_selection_confirmed = False
             st.session_state.conversation_id = None
             st.session_state.conversation_summaries = []
@@ -366,7 +369,30 @@ def fetch_app_users() -> tuple[list[dict[str, Any]], str | None]:
                 or entry.get("email")
                 or f"User {user_id}"
             )
-            users.append({"user_id": str(user_id), "label": str(display_name)})
+            role_code = entry.get("role_code")
+            role_name = entry.get("role_name")
+
+            role_obj = entry.get("role")
+            if isinstance(role_obj, dict):
+                if role_code is None:
+                    role_code = role_obj.get("role_code")
+                if role_name is None:
+                    role_name = role_obj.get("role_name") or role_obj.get("name")
+
+            if role_name is None:
+                role_name = entry.get("role") if isinstance(entry.get("role"), str) else None
+
+            if role_code is None and role_name is not None:
+                role_code = role_name
+
+            users.append(
+                {
+                    "user_id": str(user_id),
+                    "label": str(display_name),
+                    "role_code": str(role_code) if role_code is not None else None,
+                    "role_name": str(role_name) if role_name else "Unknown Role",
+                }
+            )
 
         users.sort(key=lambda user: user["label"].lower())
         return users, None
@@ -660,7 +686,8 @@ if not st.session_state.user_selection_confirmed:
     if available_users:
         option_labels = ["Select a user..."]
         for user in available_users:
-            option_label = f"{user['label']} (ID: {user['user_id']})"
+            role_name = user.get("role_name") or "Unknown Role"
+            option_label = f"{user['label']} ({role_name}) (ID: {user['user_id']})"
             option_labels.append(option_label)
             option_to_user[option_label] = user
         selected_label = st.selectbox(
@@ -677,6 +704,7 @@ if not st.session_state.user_selection_confirmed:
         selected_user = option_to_user[selected_label]
         st.session_state.selected_user_id = selected_user["user_id"]
         st.session_state.selected_user_label = selected_user["label"]
+        st.session_state.selected_user_role_code = selected_user.get("role_code")
         st.session_state.user_selection_confirmed = True
         st.session_state.history = []
         st.session_state.welcome_loaded = False
@@ -870,6 +898,7 @@ def ask_orchestrator(user_question: str, status: Any) -> tuple[FinalFinancialRes
                 "user_question": user_question,
                 "api_base_url": api_base_url,
                 "user_id": st.session_state.selected_user_id,
+                "role_code": st.session_state.selected_user_role_code,
                 #"conversation_history": conversation_history,
                 "conversation_id": st.session_state.conversation_id
             },

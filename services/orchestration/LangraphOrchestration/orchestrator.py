@@ -6,8 +6,9 @@ import logging
 
 from fastapi import HTTPException, logger
 
-from models.models import AnalystClaim, CitationInfo, FinalFinancialResponse, OrchestratorRequest, ReviewRequest, ReviewResult, FinancialAnalysisState, AnalystResult
-from agents import InputGuardrailTripwireTriggered, MaxTurnsExceeded, ModelBehaviorError, Runner
+from database.repository.conversationhistory import ConversationHistorySession
+from models.models import AnalystClaim, CitationInfo, FinalFinancialResponse, OrchestratorRequest, ReviewRequest, ReviewResult, FinancialAnalysisState, AnalystResult, UserContext
+from agents import InputGuardrailTripwireTriggered, MaxTurnsExceeded, ModelBehaviorError, Runner, ToolInputGuardrailTripwireTriggered
 from langgraph.graph import StateGraph, START, END
 import json
 
@@ -24,8 +25,8 @@ logger.setLevel(logging.INFO)
 
 class Orchestrator:
 
-    MAX_ANALYST_TURNS = 2
-    MAX_REVIEW_CYCLES = 2
+    MAX_ANALYST_TURNS = 5
+    MAX_REVIEW_CYCLES = 4
 
     #def __init__(self):#, analyst_node, reviewer_node, revision_node, final_node):
         # self.analyst_node = analyst_node
@@ -61,6 +62,9 @@ class Orchestrator:
 
             state = await financial_graph.ainvoke(
                 {
+                    "user_id": payload.user_id,
+                    "role_code": payload.role_code,
+                    "conversation_id": payload.conversation_id,
                     "user_question": user_question,
                     "review_cycle": 0,
                 }
@@ -76,6 +80,18 @@ class Orchestrator:
                                         "final_response": finalResponse.model_dump(),
                                         "conversation_id": payload.conversation_id,
                                     }).encode("utf-8")
+        except ToolInputGuardrailTripwireTriggered as exc:
+            logger.error("Input guardrail tripwire triggered for question: %s", user_question)
+            yield event_stream_line(
+                                            "error",
+                                            {
+                                                "stage": "request_processed",
+                                                "message": (
+                                                    "You dont have access to the resource requested."
+                                                ),
+                                                "conversation_id": payload.conversation_id,
+                                            },
+                                        ).encode("utf-8")
         except InputGuardrailTripwireTriggered as exc:
             logger.error("Input guardrail tripwire triggered for question: %s", user_question)
             yield event_stream_line(
@@ -256,10 +272,18 @@ class Orchestrator:
             agent_instance = Agents()
             analyst_agent = agent_instance.build_analyst_agent()
 
+            session = ConversationHistorySession(user_id=state["user_id"], conversation_id=state["conversation_id"], title=state["user_question"][:100])
+
+            user_context = UserContext(
+                role_code=state["role_code"],
+            )
+
             result = await Runner.run(
                 analyst_agent,
                 state["user_question"],
                 max_turns=8,
+                context=user_context,
+                session=session,
             )
 
             analysis: AnalystResult = (
@@ -282,6 +306,7 @@ class Orchestrator:
         try:
             agent_instance = Agents()
             reviewer_agent = agent_instance.build_reviewer_agent()
+            #session = ConversationHistorySession(user_id=state["user_id"], conversation_id=state["conversation_id"])
 
             analysis = state["analysis_result"]
             
@@ -303,6 +328,7 @@ class Orchestrator:
                 reviewer_agent,
                 review_request.model_dump_json(),
                 max_turns=4,
+                #session=session,
             )
 
             review: ReviewResult = result.final_output
@@ -317,7 +343,6 @@ class Orchestrator:
             }
         except Exception as exc:
             raise exc
-
 
 
     async def revision_node(
@@ -358,11 +383,13 @@ class Orchestrator:
 
             agent_instance = Agents()
             analyst_agent = agent_instance.build_analyst_agent()
+            #session = ConversationHistorySession(user_id=state["user_id"], conversation_id=state["conversation_id"])
 
             result = await Runner.run(
                 analyst_agent,
                 revision_input,
                 max_turns=self.MAX_ANALYST_TURNS,
+                #session=session,
             )
 
             revised_analysis: AnalystResult = result.final_output

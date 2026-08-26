@@ -18,6 +18,7 @@ class RankOrder(BaseModel):
 
 
 class Result(BaseModel):
+    chunk_id: str
     page_content: str
     metadata: dict[str, Any]
 
@@ -61,6 +62,8 @@ class FinancialRequest(BaseModel):
 class OrchestratorRequest(BaseModel):
     user_question: str = Field(..., min_length=1)
     api_base_url: str = Field(default="http://127.0.0.1:8000")
+    user_id: str = Field(description="ID of the user making the request.")
+    role_code: str | None = Field(default=None, description="Optional role code of the user making the request.")
     conversation_id: str | None = Field(default=None, description="Optional conversation ID to maintain context across multiple requests.")
 
 
@@ -380,6 +383,12 @@ class FinanceRequestValidation(BaseModel):
 
 class FinancialAnalysisState(TypedDict, total=False):
 
+    user_id: str
+
+    role_code: str
+
+    conversation_id: str
+
     user_question: str
 
     analysis_result: AnalystResult
@@ -391,3 +400,10 @@ class FinancialAnalysisState(TypedDict, total=False):
     final_answer: FinalFinancialResponse
 
     last_action: str
+
+class UserContext:
+    #user_id: str
+    role_code: str
+
+    def __init__(self, role_code: str):
+        self.role_code = role_code

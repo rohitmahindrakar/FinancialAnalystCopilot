@@ -6,14 +6,14 @@ from typing import Any
 from agents import Agent, GuardrailFunctionOutput, InputGuardrailTripwireTriggered, MaxTurnsExceeded, ModelBehaviorError, ModelSettings, OpenAIResponsesModel, RunContextWrapper, Runner, TResponseInputItem, input_guardrail
 from fastapi import HTTPException
 
-from models.models import ChartSeries, ChartSpec, FinanceRequestValidation, ReviewRequest, ReviewResult
+from models.models import ChartSeries, ChartSpec, FinanceRequestValidation, ReviewRequest, ReviewResult, UserContext
 from services.models.models import OrchestratorRequest
 from services.orchestration.agents.agents import Agents
 from services.orchestration.openAIOrchestration.orchestration_common import OPENAI_MODEL, event_stream_line, get_openai_client
 from services.orchestration.openAIOrchestration.orchestrator_loop import OrchestrationLoopRunner
 
 #import the tools
-from services.routers.conversationhistory import ConversationHistorySession
+from database.repository.conversationhistory import ConversationHistorySession
 from services.tools.chroma_tools import CHROMA_TOOLS, query_finance_chunks_by_id
 from services.tools.dimension_tools import DIMENSION_TOOLS
 from services.tools.financial_query_tool import query_financial_data
@@ -344,13 +344,15 @@ class Orchestrator:
             
             # agent = self.build_orchestrator_agent()
 
-            session = ConversationHistorySession(conversation_id=payload.conversation_id)
+            session = ConversationHistorySession(user_id=payload.user_id, conversation_id=payload.conversation_id)
+            user_context = UserContext(role_code=payload.role_code or "")
 
             result = await Runner.run(
                 agent,
                 user_question,
                 max_turns=10,
                 session=session,
+                context=user_context,
                 hooks=DebugHooks(),
             )
 
