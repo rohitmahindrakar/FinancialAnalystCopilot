@@ -164,5 +164,17 @@ class ChunkChromaStore:
                 return self._collection.query(query_texts=[query], n_results=n_results)
             raise
 
+    def document_exists(self, document_name: str) -> bool:
+        try:
+            # Use a metadata filter instead of query_texts so no embedding is generated.
+            results = self._collection.get(where={"document_name": document_name}, limit=1, include=[])
+            return bool(results.get("ids"))
+        except Exception as exc:
+            if self._is_recoverable_chroma_error(exc):
+                self._reset_collection()
+                results = self._collection.get(where={"document_name": document_name}, limit=1, include=[])
+                return bool(results.get("ids"))
+            raise
+
 
 __all__ = ["ChunkChromaStore"]

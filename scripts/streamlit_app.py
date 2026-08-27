@@ -163,6 +163,9 @@ st.markdown(
         color: #f3f8ff;
         border-radius: 12px;
         text-align: left;
+        padding: 0.55rem 0.9rem;
+        line-height: 1.35;
+        white-space: normal;
         transition: all 220ms ease;
     }
 
@@ -170,6 +173,40 @@ st.markdown(
         border-color: #9fd8ff;
         background: rgba(255, 255, 255, 0.22);
         transform: translateY(-1px);
+    }
+
+    section[data-testid="stSidebar"] [data-testid="stExpander"] {
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.08);
+        overflow: hidden;
+    }
+
+    section[data-testid="stSidebar"] [data-testid="stExpander"] details {
+        background: rgba(255, 255, 255, 0.08);
+    }
+
+    section[data-testid="stSidebar"] [data-testid="stExpander"] summary {
+        background: rgba(12, 33, 58, 0.92) !important;
+        color: #edf4ff !important;
+        padding: 0.45rem 0.65rem;
+    }
+
+    section[data-testid="stSidebar"] [data-testid="stExpander"] summary:hover,
+    section[data-testid="stSidebar"] [data-testid="stExpander"] summary:focus,
+    section[data-testid="stSidebar"] [data-testid="stExpander"] details[open] > summary {
+        background: rgba(21, 60, 97, 0.96) !important;
+        color: #ffffff !important;
+    }
+
+    section[data-testid="stSidebar"] [data-testid="stExpander"] summary svg {
+        fill: #cce6ff !important;
+    }
+
+    section[data-testid="stSidebar"] [data-testid="stExpanderDetails"] {
+        background: rgba(8, 28, 49, 0.6);
+        border-top: 1px solid rgba(255, 255, 255, 0.15);
+        padding: 0.35rem 0.55rem 0.65rem;
     }
 
     div[data-testid="stChatMessage"] {
@@ -274,34 +311,99 @@ with st.sidebar:
     api_base_url = st.text_input("API base URL", value=DEFAULT_API_BASE_URL)
 
     st.divider()
-    st.markdown("**Try a sample question**")
-    for idx, sample in enumerate(SAMPLE_QUESTIONS):
-        if st.button(sample, key=f"sample_{idx}", use_container_width=True):
-            st.session_state.pending_question = sample
+    with st.expander("Try a sample question", expanded=False):
+        for idx, sample in enumerate(SAMPLE_QUESTIONS):
+            if st.button(sample, key=f"sample_{idx}", use_container_width=True):
+                st.session_state.pending_question = sample
 
-    #add a button to call a backend API \chunk-documents\{internal}, and shows the streaming response below the button
-    st.markdown("**Chunk documents**")
-    if st.button("📄 Chunk documents", use_container_width=True):
-        internal = st.checkbox("Use internal model", value=False)
-        response = requests.get(f"{api_base_url.rstrip('/')}/orchestrator/chunk-documents/{internal}", stream=True)
-        for line in response.iter_lines():
-            if line:
-                #write a method to capture the streaming response json, that has the format {"event": "status", "data": {"message": "chunking in progress"}}, and displays it in a block below the button, and if the event is "final", display the final message in a success message box
-                try:
-                    decoded_line = line.decode("utf-8")
-                    parsed_line = json.loads(decoded_line)
-                    event = parsed_line.get("event")
-                    data = parsed_line.get("data", {})
-                    message = data.get("message", "")
-                    if event == "status":
-                        st.info(message)
-                    elif event == "final":
-                        st.success(message)
-                except json.JSONDecodeError:
-                    st.error(f"Failed to decode JSON from line: {line}")
-                except Exception as e:
-                    st.error(f"An error occurred while processing the line: {e}")
-                #st.text(line.decode("utf-8"))
+    # Add a button to call the backend chunk-documents endpoint and show streaming updates.
+    with st.expander("Chunk Documents", expanded=False):
+        internal = st.checkbox("Use internal model", value=False, key="chunk_docs_internal")
+        chunk_stream_placeholder = st.empty()
+        chunk_final_placeholder = st.empty()
+        if st.button("📄 Chunk documents", use_container_width=True):
+            status_messages: list[str] = []
+
+            def render_status_block() -> None:
+                if not status_messages:
+                    return
+                chunk_stream_placeholder.info("\n".join(status_messages[-8:]))
+
+            def handle_chunk_event(event: str, payload: dict[str, Any]) -> None:
+                message = str(payload.get("message") or payload.get("status") or "").strip()
+                if event == "status" and message:
+                    status_messages.append(message)
+                    render_status_block()
+                elif event == "final":
+                    final_message = message or "Document chunking completed."
+                    chunk_final_placeholder.success(final_message)
+                elif event == "error":
+                    error_message = message or str(payload.get("error") or "Chunking failed.")
+                    chunk_final_placeholder.error(error_message)
+
+            try:
+                response = requests.get(
+                    f"{api_base_url.rstrip('/')}/orchestrator/chunk-documents/{internal}",
+                    stream=True,
+                    timeout=180,
+                )
+                response.raise_for_status()
+
+                event_name: str | None = None
+                data_lines: list[str] = []
+
+                for raw_line in response.iter_lines(decode_unicode=True):
+                    if raw_line is None:
+                        continue
+
+                    line = raw_line.strip()
+
+                    # SSE event boundary: parse accumulated data payload.
+                    if not line:
+                        if event_name is not None and data_lines:
+                            json_payload = "".join(data_lines)
+                            payload = json.loads(json_payload)
+                            if isinstance(payload, dict):
+                                handle_chunk_event(event_name, payload)
+                        event_name = None
+                        data_lines = []
+                        continue
+
+                    if line.startswith("event:"):
+                        event_name = line.split(":", 1)[1].strip()
+                        continue
+
+                    if line.startswith("data:"):
+                        data_lines.append(line.split(":", 1)[1].strip())
+                        continue
+
+                    # Fallback for NDJSON streams: {"event": "status", "data": {...}}
+                    parsed_line = json.loads(line)
+                    if isinstance(parsed_line, dict):
+                        event = str(parsed_line.get("event") or "").strip()
+                        data = parsed_line.get("data")
+                        if event and isinstance(data, dict):
+                            handle_chunk_event(event, data)
+
+                # Flush final SSE event if stream ended without trailing blank line.
+                if event_name is not None and data_lines:
+                    json_payload = "".join(data_lines)
+                    payload = json.loads(json_payload)
+                    if isinstance(payload, dict):
+                        handle_chunk_event(event_name, payload)
+
+                if not status_messages:
+                    chunk_stream_placeholder.info("Chunk request sent. Waiting for backend status events.")
+
+            except requests.HTTPError as exc:
+                detail = exc.response.text if exc.response is not None else str(exc)
+                chunk_final_placeholder.error(f"Chunk API error: {detail}")
+            except requests.RequestException as exc:
+                chunk_final_placeholder.error(f"Chunk API connection error: {exc}")
+            except json.JSONDecodeError as exc:
+                chunk_final_placeholder.error(f"Failed to decode stream payload: {exc}")
+            except Exception as exc:  # noqa: BLE001 - surface unexpected stream handling issues
+                chunk_final_placeholder.error(f"Unexpected chunk streaming error: {exc}")
                 
     st.divider()
     if st.button("🗑️ Clear conversation", use_container_width=True):
@@ -979,12 +1081,6 @@ if st.session_state.user_selection_confirmed and st.session_state.selected_user_
         st.session_state.conversation_history_user_id != st.session_state.selected_user_id
     )
 
-    with st.sidebar:
-        st.divider()
-        st.markdown("**Conversation history**")
-        if st.button("Refresh history", key="refresh_conversation_history", use_container_width=True):
-            should_refresh_history = True
-
     if should_refresh_history:
         with st.spinner("Loading conversation history..."):
             history_records, history_error = fetch_user_conversation_history(
@@ -995,62 +1091,68 @@ if st.session_state.user_selection_confirmed and st.session_state.selected_user_
         st.session_state.conversation_history_user_id = st.session_state.selected_user_id
 
     with st.sidebar:
-        if st.session_state.conversation_history_error:
-            st.error(st.session_state.conversation_history_error)
-        if st.session_state.conversation_load_error:
-            st.error(st.session_state.conversation_load_error)
+        st.divider()
+        with st.expander("Conversation History", expanded=True):
+            if st.session_state.conversation_history_error:
+                st.error(st.session_state.conversation_history_error)
+            if st.session_state.conversation_load_error:
+                st.error(st.session_state.conversation_load_error)
 
-        summaries = st.session_state.conversation_summaries
-        if st.button("Start a new conversation", key="start_new_conversation", use_container_width=True):
-            st.session_state.history = []
-            st.session_state.welcome_loaded = False
-            st.session_state.conversation_id = None
-            st.rerun()
+            if st.button("Refresh history", key="refresh_conversation_history", use_container_width=True):
+                st.session_state.conversation_history_user_id = None
+                st.rerun()
 
-        grouped_summaries = _group_conversation_summaries(summaries)
-        has_any_history = any(grouped_summaries[group] for group in ["Today", "Yesterday", "Older"])
-        if not has_any_history:
-            st.caption("No previous conversations found.")
+            summaries = st.session_state.conversation_summaries
+            if st.button("Start a new conversation", key="start_new_conversation", use_container_width=True):
+                st.session_state.history = []
+                st.session_state.welcome_loaded = False
+                st.session_state.conversation_id = None
+                st.rerun()
 
-        for group_name in ["Today", "Yesterday", "Older"]:
-            group_entries = grouped_summaries[group_name]
-            if not group_entries:
-                continue
+            grouped_summaries = _group_conversation_summaries(summaries)
+            has_any_history = any(grouped_summaries[group] for group in ["Today", "Yesterday", "Older"])
+            if not has_any_history:
+                st.caption("No previous conversations found.")
 
-            st.caption(group_name)
-            for summary in group_entries:
-                button_label = f"{summary['title']} | {summary['date_label']}"
-                is_active = summary["conversation_id"] == st.session_state.conversation_id
-                if is_active:
-                    st.markdown(f"**Active: {button_label}**")
-                if st.button(
-                    "Open" if is_active else button_label,
-                    key=f"open_conversation_{summary['conversation_id']}",
-                    use_container_width=True,
-                    type="secondary" if is_active else "tertiary",
-                    help=f"Conversation ID: {summary['conversation_id']}",
-                ):
-                    with st.spinner("Loading selected conversation..."):
-                        selected_records, selected_error = fetch_conversation_by_id(summary["conversation_id"])
+            for group_name in ["Today", "Yesterday", "Older"]:
+                group_entries = grouped_summaries[group_name]
+                if not group_entries:
+                    continue
 
-                    if selected_error:
-                        st.session_state.conversation_load_error = selected_error
-                    else:
-                        ordered_records = sorted(
-                            selected_records,
-                            key=lambda row: int(row.get("sequence_no") or 0),
-                        )
-                        loaded_messages: list[dict[str, str]] = []
-                        for record in ordered_records:
-                            message = _convert_history_record_to_chat_message(record)
-                            if message:
-                                loaded_messages.append(message)
+                st.caption(group_name)
+                for summary in group_entries:
+                    button_label = f"{summary['title']} | {summary['date_label']}"
+                    is_active = summary["conversation_id"] == st.session_state.conversation_id
+                    if is_active:
+                        st.markdown(f"**Active: {button_label}**")
+                    if st.button(
+                        "Open" if is_active else button_label,
+                        key=f"open_conversation_{summary['conversation_id']}",
+                        use_container_width=True,
+                        type="secondary" if is_active else "tertiary",
+                        help=f"Conversation ID: {summary['conversation_id']}",
+                    ):
+                        with st.spinner("Loading selected conversation..."):
+                            selected_records, selected_error = fetch_conversation_by_id(summary["conversation_id"])
 
-                        st.session_state.history = loaded_messages
-                        st.session_state.welcome_loaded = True
-                        st.session_state.conversation_id = summary["conversation_id"]
-                        st.session_state.conversation_load_error = None
-                    st.rerun()
+                        if selected_error:
+                            st.session_state.conversation_load_error = selected_error
+                        else:
+                            ordered_records = sorted(
+                                selected_records,
+                                key=lambda row: int(row.get("sequence_no") or 0),
+                            )
+                            loaded_messages: list[dict[str, str]] = []
+                            for record in ordered_records:
+                                message = _convert_history_record_to_chat_message(record)
+                                if message:
+                                    loaded_messages.append(message)
+
+                            st.session_state.history = loaded_messages
+                            st.session_state.welcome_loaded = True
+                            st.session_state.conversation_id = summary["conversation_id"]
+                            st.session_state.conversation_load_error = None
+                        st.rerun()
 
 if not st.session_state.welcome_loaded:
     st.session_state.history.append({"role": "assistant", "text": fetch_welcome_message()})

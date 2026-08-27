@@ -127,9 +127,21 @@ class Injestor:
 
         document_paths = self._list_documents()
         self.logger.info("Ingesting documents from: %s", self.source_dir)
+
+        #check if document already exists in the collection
+        documentsToRemove = []
+        for path in document_paths:
+            if self.chroma_store.document_exists(path.name):
+                self.logger.info("Document already exists in the collection: %s", path.name)
+                documentsToRemove.append(path)
+        for path in documentsToRemove:
+            document_paths.remove(path)
+
         if not document_paths:
             self.logger.warning("No supported documents were found in %s", self.source_dir)
             return []
+
+        
         self.logger.info("Found %d documents to ingest in %s", len(document_paths), self.source_dir)
         tasks = [self._process_document(path) for path in document_paths]
         results = await asyncio.gather(*tasks)
