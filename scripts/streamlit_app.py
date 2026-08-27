@@ -631,8 +631,37 @@ def _extract_text(value: Any) -> str:
     return ""
 
 
-def _convert_history_record_to_chat_message(record: dict[str, Any]) -> dict[str, str] | None:
-    role_value = str(record.get("role") or "").lower()
+def _resolve_history_role(record: dict[str, Any], item_payload: Any) -> str | None:
+    role_value = str(record.get("role") or "").strip().lower()
+    item_type = str(record.get("item_type") or "").strip().lower()
+
+    payload_role = ""
+    payload_type = ""
+    if isinstance(item_payload, dict):
+        payload_role = str(item_payload.get("role") or "").strip().lower()
+        payload_type = str(item_payload.get("type") or "").strip().lower()
+
+    for candidate in (role_value, payload_role):
+        if candidate in {"user", "assistant"}:
+            return candidate
+
+    merged_markers = " ".join(
+        marker
+        for marker in (role_value, item_type, payload_type, payload_role)
+        if marker
+    )
+
+    # Persisted OpenAI agent history can include values like input_text/output_text/message.
+    # Map these to chat roles so resumed conversations show both sides correctly.
+    if any(token in merged_markers for token in ["assistant", "output", "response", "model"]):
+        return "assistant"
+    if any(token in merged_markers for token in ["user", "input", "prompt"]):
+        return "user"
+
+    return None
+
+
+def _convert_history_record_to_chat_message(record: dict[str, Any]) -> dict[str, Any] | None:
     item_payload = record.get("item_json")
 
     if isinstance(item_payload, str):
@@ -641,19 +670,44 @@ def _convert_history_record_to_chat_message(record: dict[str, Any]) -> dict[str,
         except json.JSONDecodeError:
             item_payload = {"text": item_payload}
 
-    payload_role = ""
-    if isinstance(item_payload, dict):
-        payload_role = str(item_payload.get("role") or "").lower()
-
-    role = role_value if role_value in {"user", "assistant"} else payload_role
-    if role not in {"user", "assistant"}:
+    role = _resolve_history_role(record, item_payload)
+    if role is None:
         return None
 
     text = _extract_text(item_payload)
     if not text:
         return None
 
-    return {"role": role, "text": text}
+    message: dict[str, Any] = {"role": role, "text": text}
+
+    if role == "assistant":
+        candidate_payload: Any = item_payload
+        if isinstance(item_payload, dict):
+            candidate_payload = (
+                item_payload.get("final_response")
+                or item_payload.get("response")
+                or item_payload.get("content")
+                or item_payload
+            )
+
+        structured_response = _coerce_final_financial_response(candidate_payload)
+
+        if structured_response is None and isinstance(text, str) and text:
+            structured_response = _coerce_final_financial_response(text)
+
+        if structured_response is not None:
+            message["text"] = structured_response.answer or text
+            message["response"] = structured_response.model_dump(mode="json")
+
+            chart_payload = _extract_chart_payload(
+                candidate_payload,
+                item_payload if isinstance(item_payload, dict) else {},
+            )
+            chart_spec = _coerce_chart_spec(chart_payload)
+            if chart_spec is not None:
+                message["chart_spec"] = chart_spec.model_dump(mode="json")
+
+    return message
 
 
 def _format_history_datetime(value: Any) -> str:
@@ -720,7 +774,7 @@ def build_conversation_summaries(history_records: list[dict[str, Any]]) -> list[
             records,
             key=lambda row: int(row.get("sequence_no") or 0),
         )
-        messages: list[dict[str, str]] = []
+        messages: list[dict[str, Any]] = []
         for record in ordered_records:
             message = _convert_history_record_to_chat_message(record)
             if message:
@@ -1042,7 +1096,7 @@ def render_response(response: FinalFinancialResponse, chart_spec: ChartSpec | No
     if not response.citations:
         return
 
-    with st.expander("Citation Information", expanded=True):
+    with st.expander("Citation Information", expanded=False):
         for citation in response.citations:
             label = citation.label or citation.citation_id
             st.markdown(f"**[{citation.citation_type.title()}] {label}**")
@@ -1142,7 +1196,7 @@ if st.session_state.user_selection_confirmed and st.session_state.selected_user_
                                 selected_records,
                                 key=lambda row: int(row.get("sequence_no") or 0),
                             )
-                            loaded_messages: list[dict[str, str]] = []
+                            loaded_messages: list[dict[str, Any]] = []
                             for record in ordered_records:
                                 message = _convert_history_record_to_chat_message(record)
                                 if message:

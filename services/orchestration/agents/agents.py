@@ -240,6 +240,8 @@ class Agents:
     If issues exist, return approved=false and identify the issues
     precisely.
 
+    If incomplete data exists, or some data could not be fetched by the earlier steps, return approved=false and specify what data is missing.
+
     Use high severity only for issues that could materially change
     the interpretation or answer.
     """
@@ -276,6 +278,8 @@ class Agents:
         - explanations of changes in financial performance
         - quarterly summary
         - summary for a specific quarter
+        - name of the company, CXO's
+        - Any other company info
 
         Examples of VALID requests:
         - "What was revenue last quarter?"

@@ -1,53 +1,109 @@
 # Financial Analyst Copilot
 
-This repository is organized into separate packages for database access, API services, and example scripts.
+FinPulseAI - Financial Analyst Copilot is a retrieval-augmented AI assistant for finance workflows. It combines document ingestion, semantic retrieval, structured finance APIs, and orchestrated LLM responses in one repository.
 
-## Project structure
+## What this repository includes
 
-- `database/`
-  - Core SQLite data access layer
-  - `connection.py` — connection manager with transaction support
-  - `crud.py` — generic `BaseDAO` and table-specific DAO classes
-  - `models.py` — typed dataclasses for each table
-  - `README.md` — package-specific usage notes
+- `services/`: FastAPI backend, orchestration routes, RAG services, and business APIs.
+- `scripts/`: local app entrypoints (including Streamlit UI) and utility scripts.
+- `database/`: SQLite connection layer, models, and CRUD utilities.
+- `tests/`: unit and integration-style tests for routing, orchestration, and RAG components.
+- `financial-copilot/`: container and Kubernetes deployment assets.
 
-- `services/`
-  - FastAPI application and request/response schemas
-  - `api_app.py` — FastAPI app entrypoint
-  - `api_schemas.py` — Pydantic request/response models
-  - `API_DOCUMENTATION.md` — generated API documentation
-  - `ollama_tool_descriptions.json` — local tool metadata for intent routing
+## Quick start (local development)
 
-- `scripts/`
-  - Convenience example scripts
-  - `example_usage.py` — sample DAO usage demonstration
+### 1) Create and activate a virtual environment
 
-## Running the API
-
-From the repository root:
+Windows PowerShell:
 
 ```powershell
-python -m uvicorn services:app --reload
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 ```
 
-The FastAPI app is exported from `services/__init__.py` as `app`.
+macOS/Linux:
 
-## Running the example script
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
 
-From the repository root:
+### 2) Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3) Run the backend API
 
 ```powershell
-python -m scripts.example_usage
+.\.venv\Scripts\python.exe -m uvicorn services:app --reload
 ```
+
+Alternative import path:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn services.api_app:app --reload
+```
+
+When the API is running:
+
+- Swagger UI: `http://127.0.0.1:8000/docs`
+- Health check: `http://127.0.0.1:8000/health-check`
+
+### 4) Run the Streamlit UI
+
+```powershell
+.\.venv\Scripts\streamlit.exe run scripts/streamlit_app.py
+```
+
+## Typical ingestion and Q&A workflow
+
+1. Place source files in `notebooks/finance_docs/`.
+2. Trigger chunking from the UI sidebar (`Chunk Documents`) or call the endpoint directly:
+   - `GET /orchestrator/chunk-documents/true` for local model chunking.
+   - `GET /orchestrator/chunk-documents/false` for OpenAI-compatible chunking.
+3. Ask questions from the Streamlit chat interface.
+
+## Key API routes
+
+- `GET /health-check`: API and DB readiness check.
+- `GET /metadata/tables`: available SQLite tables.
+- `GET /users`: list app users.
+- `GET /orchestrator/welcome`: startup context and data overview.
+- `POST /orchestrator/ask-openai`: streaming orchestrated response.
+- `GET /orchestrator/chunk-documents/{internal}`: document chunking and embedding workflow.
+- `POST /chroma/query-finance`: semantic retrieval over chunked documents.
+- `GET /tools` and `POST /intent/route`: local tool discovery and intent routing.
+
+## Configuration
+
+Common environment variables used in the repo:
+
+- `OPENAI_API_KEY`: required for external model calls.
+- `OPENAI_API_BASE`: optional custom OpenAI-compatible base URL.
+- `OPENAI_MODEL`: model used for external chunking/orchestration defaults.
+- `API_BASE_URL`: Streamlit backend target (default `http://127.0.0.1:8000`).
+
+Create a `.env` file in the repo root when using external providers.
+
+## Tests
+
+Run the test suite from the repository root:
+
+```bash
+pytest -q
+```
+
+## Deployment assets
+
+For containerized and Kubernetes deployment, see:
+
+- `financial-copilot/README.md`
+- `financial-copilot/k8s/`
 
 ## Notes
 
-- The database file is `financial_analyst_copilot.db`.
-- The core `database` package is independent of the API layer.
-- API routes and schema definitions live under `services`.
-- New intent routing endpoints:
-  - `GET /tools` — list available Ollama-enabled API tools
-  - `POST /intent/route` — select the best tool for a user question via local Ollama
-
-- run the backend apis - .\.venv\Scripts\python.exe -m uvicorn services:app --reload;
-- run the streamlit front end - .\.venv\Scripts\streamlit.exe run scripts/streamlit_app.py
+- SQLite database file defaults to `financial_analyst_copilot.db`.
+- Chroma persistence is under `database/chroma/`.
+- API app export is `services:app` via `services/__init__.py`.
